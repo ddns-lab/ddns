@@ -9,6 +9,8 @@ description = "Netlink-based IP source for the DDNS system (Linux)"
 
 [dependencies]
 ddns-core = { path = "../ddns-core", version = "0.1" }
+
+# Common dependencies
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 async-trait = { workspace = true }
@@ -18,7 +20,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
-# Netlink library (Linux only)
+# Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
 netlink-sys = { version = "0.8", features = ["tokio"] }
 netlink-packet-core = "0.7"

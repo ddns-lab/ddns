@@ -35,6 +35,7 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 /// Default debounce window to ignore IP flapping
+#[cfg(target_os = "linux")]
 const DEFAULT_DEBOUNCE_MS: u64 = 500;
 
 /// Netlink-based IP source for Linux
@@ -106,127 +107,22 @@ impl NetlinkIpSource {
 #[async_trait::async_trait]
 impl IpSource for NetlinkIpSource {
     async fn current(&self) -> Result<IpAddr> {
-        use netlink_packet_core::{NetlinkPayload, NlaVector};
-        use netlink_packet_route::AddressAttribute;
-        use netlink_packet_route::RtnlMessage;
-        use netlink_packet_route::address::AddressMessage;
-        use netlink_sys::{NetlinkMessage, NetlinkMessageType, NetlinkRequest, Socket};
-
-        let mut sock = Socket::new(netlink_sys::Protocol::Route)
-            .map_err(|e| Error::provider("netlink", format!("Failed to create socket: {}", e)))?;
-
-        // Send RTM_GETADDR request
-        let mut req = NetlinkRequest::new();
-        let mut msg = AddressMessage::default();
-
-        let payload = NetlinkPayload::with_payload(RtnlMessage::GetAddress(msg));
-        let nl_msg = NetlinkMessage::new(payload);
-        req.add(nl_msg);
-
-        sock.send(&mut req)
-            .map_err(|e| Error::provider("netlink", format!("Failed to send: {}", e)))?;
-
-        // Receive responses
-        let mut recv_buf = vec![0u8; 8192];
-        let mut all_addresses = Vec::new();
-
-        loop {
-            let n = sock
-                .recv(&mut recv_buf)
-                .map_err(|e| Error::provider("netlink", format!("Failed to receive: {}", e)))?;
-
-            if n == 0 {
-                break;
-            }
-
-            // Parse responses
-            let mut iter = netlink_sys::Socket::new(netlink_sys::Protocol::Route)
-                .unwrap()
-                .recv_from(&mut recv_buf[..n])
-                .map_err(|e| Error::provider("netlink", format!("Failed to parse: {}", e)))?;
-
-            break;
-        }
-
-        // For now, return a simple implementation
-        // In production, we'd parse the Netlink messages properly
-        Err(Error::not_found("Netlink current() not fully implemented"))
+        // TODO: Implement using netlink-sys
+        Err(Error::not_found("Netlink current() not yet implemented"))
     }
 
     fn watch(&self) -> Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>> {
-        use std::os::unix::io::FromRawFd;
-        use tokio::net::unix::UnixStream;
+        // TODO: Implement using netlink-sys with async monitoring
+        use tokio_stream::{StreamExt, wrappers::UnboundedReceiverStream};
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let interface_filter = self.interface.clone();
-        let version_filter = self.version;
-        let debounce_duration = self.debounce_duration;
-
         tokio::spawn(async move {
-            tracing::info!("Starting Netlink IP monitoring (event-driven)");
-
-            // Create Netlink socket
-            let sock = match netlink_sys::Socket::new(netlink_sys::Protocol::Route) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("Failed to create Netlink socket: {}", e);
-                    return;
-                }
-            };
-
-            // Bind with multicast groups for IPv4 and IPv6 address events
-            // RTMGRP_IPV4_IFADDR = 0x10
-            // RTMGRP_IPV6_IFADDR = 0x100
-            let groups = netlink_sys::Socket::new(netlink_sys::Protocol::Route)
-                .unwrap()
-                .bind_mcast_groups(0x10 | 0x100)
-                .map_err(|e| Error::provider("netlink", format!("Failed to bind: {}", e)));
-
-            if let Err(e) = groups {
-                tracing::error!("Failed to bind to Netlink groups: {}", e);
-                return;
-            }
-
-            tracing::info!("Successfully subscribed to Netlink address events");
-
-            // Convert to tokio socket
-            let std_socket = unsafe { std::net::UnixStream::from_raw_fd(sock.as_raw_fd()) };
-            let tokio_socket = match UnixStream::from_std(std_socket) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("Failed to convert to tokio socket: {}", e);
-                    return;
-                }
-            };
-
-            let mut last_known_ip: Option<IpAddr> = None;
-            let mut last_event = Instant::now() - Duration::from_secs(60);
-
-            let mut buffer = vec![0u8; 8192];
-
-            loop {
-                match tokio_socket.try_read(&mut buffer) {
-                    Ok(n) => {
-                        if n == 0 {
-                            continue;
-                        }
-
-                        // Parse Netlink messages - for now simplified
-                        // In production, we'd parse RTM_NEWADDR messages
-                        tracing::debug!("Received {} bytes from Netlink", n);
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                    Err(e) => {
-                        tracing::warn!("Netlink receive error: {}", e);
-                    }
-                }
-            }
+            tracing::warn!("Netlink IP monitoring not yet implemented");
+            drop(tx);
         });
 
-        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
+        Box::pin(UnboundedReceiverStream::new(rx))
     }
 
     fn version(&self) -> Option<TraitsIpVersion> {
@@ -236,24 +132,6 @@ impl IpSource for NetlinkIpSource {
             Some(ConfigIpVersion::Both) => None,
             None => None,
         }
-    }
-}
-
-/// Check if IP should be accepted based on version filter
-#[cfg(target_os = "linux")]
-fn should_accept_ip_filtered(ip: &IpAddr, version_filter: &Option<ConfigIpVersion>) -> bool {
-    if ip.is_loopback() || ip.is_unspecified() {
-        return false;
-    }
-
-    if let Some(version) = version_filter {
-        match version {
-            ConfigIpVersion::V4 => ip.is_ipv4(),
-            ConfigIpVersion::V6 => ip.is_ipv6(),
-            ConfigIpVersion::Both => true,
-        }
-    } else {
-        true
     }
 }
 
