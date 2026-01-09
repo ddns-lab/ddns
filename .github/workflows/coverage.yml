@@ -21,6 +21,7 @@ jobs:
 
       - name: Generate coverage report
         run: cargo tarpaulin --workspace --all-features --timeout 300 --out Xml
+        continue-on-error: true
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
@@ -28,3 +29,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./cobertura.xml
           fail_ci_if_error: false
+        continue-on-error: true

@@ -19,7 +19,6 @@ docs/
 
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
 
 # Testing

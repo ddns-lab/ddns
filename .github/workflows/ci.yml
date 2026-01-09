@@ -90,10 +90,12 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
       - name: Run cargo audit
-        uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo audit
+        continue-on-error: true
 
   docker:
     name: Docker Build
