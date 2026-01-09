@@ -34,7 +34,8 @@ COPY crates/ ./crates/
 COPY examples/ ./examples/
 
 # Build release binary
-RUN cargo build --release --bin ddnsd
+# Note: Disable netlink feature in Docker (containers typically use HTTP IP source)
+RUN cargo build --release --bin ddnsd --no-default-features --features cloudflare,http
 
 # =============================================================================
 # Runtime Stage
