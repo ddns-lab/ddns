@@ -33,10 +33,19 @@ use ddns_core::traits::{IpSource, IpSourceFactory};
 use ddns_core::{Error, Result};
 
 #[cfg(target_os = "linux")]
-use ddns_core::traits::IpVersion;
+use ddns_core::config::IpVersion;
+
+#[cfg(target_os = "linux")]
+use ddns_core::traits::IpChangeEvent;
 
 #[cfg(target_os = "linux")]
 use std::net::IpAddr;
+
+#[cfg(target_os = "linux")]
+use std::pin::Pin;
+
+#[cfg(target_os = "linux")]
+use tokio_stream::Stream;
 
 /// Netlink-based IP source for Linux
 #[cfg(target_os = "linux")]
