@@ -15,7 +15,8 @@
 # =============================================================================
 # Build Stage
 # =============================================================================
-FROM rust:1.83-alpine AS builder
+# Use Rust 1.85+ for Edition 2024 support
+FROM rust:1.85-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -39,11 +40,8 @@ RUN cargo build --release --bin ddnsd
 # =============================================================================
 FROM alpine:3.19
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ca-certificates \
-    # For DNS resolution
-    # Minimal set for network operations
+# Install runtime dependencies (ca-certificates for SSL/TLS)
+RUN apk add --no-cache ca-certificates
 
 # Create non-root user
 RUN addgroup -S ddns && \
