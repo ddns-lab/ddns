@@ -1,0 +1,91 @@
+# Docker Compose for ddnsd
+#
+# This is an example configuration for running ddnsd with Docker Compose.
+# Copy this file to docker-compose.override.yml and customize with your values.
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f
+#   docker-compose down
+
+version: '3.8'
+
+services:
+  ddnsd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ddnsd:latest
+    container_name: ddnsd
+    restart: on-failure
+    # Use host network to access host's network interface for IP detection
+    # Alternative: remove 'network_mode: host' and use --cap-add=NET_ADMIN
+    network_mode: host
+    environment:
+      # IP Source Configuration
+      - DDNS_IP_SOURCE_TYPE=netlink
+      - DDNS_IP_SOURCE_INTERFACE=eth0
+
+      # DNS Provider Configuration
+      - DDNS_PROVIDER_TYPE=cloudflare
+      # IMPORTANT: Set your actual API token in docker-compose.override.yml
+      - DDNS_PROVIDER_API_TOKEN=${DDNS_PROVIDER_API_TOKEN:-your_token_here}
+      - DDNS_PROVIDER_ZONE_ID=${DDNS_PROVIDER_ZONE_ID:-}
+
+      # Records to Update
+      - DDNS_RECORDS=${DDNS_RECORDS:-example.com,www.example.com}
+
+      # State Store
+      - DDNS_STATE_STORE_TYPE=memory
+
+      # Logging
+      - DDNS_LOG_LEVEL=${DDNS_LOG_LEVEL:-info}
+
+      # Engine Configuration (optional)
+      - DDNS_MAX_RETRIES=3
+      - DDNS_RETRY_DELAY_SECS=5
+      - DDNS_MIN_UPDATE_INTERVAL_SECS=60
+      - DDNS_EVENT_CHANNEL_CAPACITY=1000
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 64M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem (state is in memory)
+    read_only: true
+
+    # Temporary filesystems for /tmp and /run
+    tmpfs:
+      - /tmp:size=10M,mode=1777
+      - /run:size=1M,mode=1777
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "ddnsd"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Uncomment to use custom network instead of host mode
+# networks:
+#   default:
+#     name: ddns-network
+#     driver: bridge

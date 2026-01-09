@@ -1,0 +1,31 @@
+# Kubernetes ConfigMap for ddnsd configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ddnsd-config
+  namespace: ddns-system
+data:
+  # IP Source Configuration
+  DDNS_IP_SOURCE_TYPE: "netlink"
+  DDNS_IP_SOURCE_INTERFACE: "eth0"
+  DDNS_IP_SOURCE_URL: ""
+  DDNS_IP_SOURCE_INTERVAL: "60"
+
+  # DNS Provider Configuration
+  DDNS_PROVIDER_TYPE: "cloudflare"
+
+  # DNS Records to Update (comma-separated)
+  DDNS_RECORDS: "example.com,www.example.com"
+
+  # State Store Configuration
+  DDNS_STATE_STORE_TYPE: "memory"
+  DDNS_STATE_STORE_PATH: ""
+
+  # Engine Configuration
+  DDNS_MAX_RETRIES: "3"
+  DDNS_RETRY_DELAY_SECS: "5"
+  DDNS_MIN_UPDATE_INTERVAL_SECS: "60"
+  DDNS_EVENT_CHANNEL_CAPACITY: "1000"
+
+  # Logging Configuration
+  DDNS_LOG_LEVEL: "info"

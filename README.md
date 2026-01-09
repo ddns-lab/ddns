@@ -1,2 +1,177 @@
-# ddns
-An event driven Dynamic DNS system
+# DDNS
+
+An event-driven Dynamic DNS system built with Rust, designed for high performance and minimal resource consumption.
+
+## Project Goals
+
+- **Extreme performance**: Minimal overhead, resource-efficient
+- **Event-driven**: React to IP changes instantly (Linux Netlink)
+- **Long-term stability**: Clear architecture, well-defined boundaries
+- **Library-first**: Core logic reusable as a Rust library
+- **Production-ready**: Comprehensive validation and error handling
+
+## Features
+
+- ✅ **Event-driven architecture**: React to network changes instantly via Linux Netlink
+- ✅ **Idempotency**: Prevents unnecessary DNS updates
+- ✅ **Provider plugin system**: Easy to add new DNS providers
+- ✅ **Cloudflare integration**: Production-ready Cloudflare DNS provider with full validation
+- ✅ **Dry-run mode**: Safe testing without making actual changes
+- ✅ **Comprehensive error handling**: Clear error messages for all failure scenarios
+- ✅ **Security-first**: API tokens never logged, all credentials via environment variables
+
+## Architecture
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  IpSource   │────▶│  DdnsEngine  │────▶│ DnsProvider │
+│  (netlink)  │     │  (ddns-core) │     │ (cloudflare)│
+└─────────────┘     └──────────────┘     └─────────────┘
+                            │
+                            ▼
+                     ┌──────────────┐
+                     │  StateStore  │
+                     │ (idempotency)│
+                     └──────────────┘
+```
+
+## Project Structure
+
+```
+ddns/
+├── .ai/                         # AI development contracts
+│   ├── AI_CONTRACT.md           # ⚠️ Non-negotiable architectural constraints
+│   └── QUICK_START.md           # Quick reference for AI agents
+├── crates/
+│   ├── ddns-core/               # Core library (traits, engine, registry)
+│   ├── ddnsd/                   # Daemon binary
+│   ├── ddns-provider-cloudflare/ # Cloudflare DNS provider ✅
+│   └── ddns-ip-netlink/         # Netlink IP source (🚧 skeleton)
+├── docs/                        # Architecture documentation
+│   └── PHASE_22_VALIDATION.md   # Cloudflare provider validation report
+├── examples/                    # Example programs and validation tools
+│   └── cloudflare-validation.rs # Real environment validation tool
+├── deploy/                      # Deployment scripts and configurations
+├── CLAUDE.md                    # Comprehensive development guide
+└── README.md
+```
+
+## Documentation
+
+- **[`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md)** - Mandatory architectural constraints for all development
+- **[`CLAUDE.md`](CLAUDE.md)** - Comprehensive development guide
+- **[`docs/PHASE_22_VALIDATION.md`](docs/PHASE_22_VALIDATION.md)** - Cloudflare provider validation report
+- **[`.ai/QUICK_START.md`](.ai/QUICK_START.md)** - Quick reference for contributors
+
+## Implementation Status
+
+### ✅ Complete
+- **Core architecture**: Trait definitions, engine orchestration, provider registry
+- **Cloudflare DNS provider**: Production-ready with full validation
+  - Automatic zone discovery
+  - A and AAAA record support (IPv4/IPv6)
+  - Dry-run mode for safe testing
+  - Comprehensive error handling
+  - Real environment validated
+- **Security**: API token protection, environment variable configuration
+- **Documentation**: Comprehensive architecture and validation docs
+
+### 🚧 In Progress / Skeleton
+- **Netlink IP source**: Framework defined, Netlink operations TODO
+- **Daemon binary**: Configuration handling implemented, engine integration TODO
+- **File-based state store**: Framework defined, persistence TODO
+- **HTTP-based IP source**: Not started
+
+## Quick Start (Cloudflare Provider)
+
+The Cloudflare provider is production-ready and can be used for validation and testing:
+
+```bash
+# Build
+cargo build --release
+
+# Run validation tool (dry-run mode - safe)
+DDNS_MODE=dry-run \
+CLOUDFLARE_API_TOKEN=your_token \
+CLOUDFLARE_ZONE_ID=your_zone_id \
+DDNS_DOMAIN=example.com \
+DDNS_RECORD_NAME=ddns.example.com \
+DDNS_TEST_IP=1.2.3.4 \
+DDNS_RECORD_TYPE=A \
+cargo run --release --example cloudflare-validation
+```
+
+See [`examples/cloudflare-validation.rs`](examples/cloudflare-validation.rs) for usage details.
+
+## Configuration
+
+The daemon (when fully implemented) will be configured via environment variables:
+
+```bash
+# IP Source
+export DDNS_IP_SOURCE_TYPE=netlink
+export DDNS_IP_SOURCE_INTERFACE=eth0
+
+# DNS Provider
+export DDNS_PROVIDER_TYPE=cloudflare
+export DDNS_PROVIDER_API_TOKEN=your_token
+export DDNS_PROVIDER_ZONE_ID=your_zone_id  # Optional
+
+# Records to update
+export DDNS_RECORDS=example.com,www.example.com
+
+# State Store
+export DDNS_STATE_STORE_TYPE=file
+export DDNS_STATE_STORE_PATH=/var/lib/ddns/state.json
+
+# Engine
+export DDNS_MAX_RETRIES=3
+export DDNS_RETRY_DELAY_SECS=5
+```
+
+## Development
+
+```bash
+# Build all crates
+cargo build
+
+# Build with optimizations
+cargo build --release
+
+# Run tests
+cargo test
+
+# Run tests for specific crate
+cargo test -p ddns-core
+cargo test -p ddns-provider-cloudflare
+
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy
+
+# Check without building
+cargo check
+```
+
+## Adding New Providers
+
+To add a new DNS provider:
+
+1. Create new crate: `crates/ddns-provider-{name}/`
+2. Implement `DnsProvider` trait from `ddns-core`
+3. Implement `DnsProviderFactory` for config-based creation
+4. Export `register()` function to register with `ProviderRegistry`
+5. Add as optional dependency to `ddnsd/Cargo.toml`
+6. Add feature flag in `ddnsd/Cargo.toml`
+
+See [`ddns-provider-cloudflare`](crates/ddns-provider-cloudflare/) as a reference implementation.
+
+## License
+
+Apache License 2.0
+
+## Contributing
+
+Please read [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) before contributing. This project has strict architectural constraints that must be followed.

@@ -1,0 +1,25 @@
+[package]
+name = "ddns-ip-netlink"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Netlink-based IP source for the DDNS system (Linux)"
+
+[dependencies]
+ddns-core = { path = "../ddns-core", version = "0.1" }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Netlink library (Linux only, to be added when implementing)
+#[target.'cfg(target_os = "linux")'.dependencies]
+# netlink-sys = "0.8"
+# netlink-packet-route = "0.20"
+# futures = "0.3"

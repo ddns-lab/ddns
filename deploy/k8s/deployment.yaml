@@ -1,0 +1,213 @@
+# Kubernetes Deployment for ddnsd
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ddnsd
+  namespace: ddns-system
+  labels:
+    app: ddnsd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ddnsd
+  template:
+    metadata:
+      labels:
+        app: ddnsd
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      serviceAccountName: ddnsd
+      automountServiceAccountToken: false
+
+      # Use host network for direct network interface access
+      # Alternative: Remove and add capabilities if needed
+      hostNetwork: true
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        readOnlyRootFilesystem: true
+
+      containers:
+      - name: ddnsd
+        image: ddnsd:latest
+        imagePullPolicy: IfNotPresent
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          # Add Netlink capability if needed (for IP monitoring)
+          # capabilities:
+          #   add:
+          #   - NET_ADMIN
+          #   drop:
+          #   - ALL
+
+        env:
+        # IP Source Configuration
+        - name: DDNS_IP_SOURCE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_IP_SOURCE_TYPE
+        - name: DDNS_IP_SOURCE_INTERFACE
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_IP_SOURCE_INTERFACE
+        - name: DDNS_IP_SOURCE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_IP_SOURCE_URL
+        - name: DDNS_IP_SOURCE_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_IP_SOURCE_INTERVAL
+
+        # DNS Provider Configuration
+        - name: DDNS_PROVIDER_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_PROVIDER_TYPE
+        - name: DDNS_PROVIDER_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ddnsd-secrets
+              key: api-token
+        - name: DDNS_PROVIDER_ZONE_ID
+          valueFrom:
+            secretKeyRef:
+              name: ddnsd-secrets
+              key: zone-id
+          optional: true
+        - name: DDNS_PROVIDER_ACCOUNT_ID
+          valueFrom:
+            secretKeyRef:
+              name: ddnsd-secrets
+              key: account-id
+          optional: true
+
+        # DNS Records
+        - name: DDNS_RECORDS
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_RECORDS
+
+        # State Store Configuration
+        - name: DDNS_STATE_STORE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_STATE_STORE_TYPE
+        - name: DDNS_STATE_STORE_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_STATE_STORE_PATH
+
+        # Engine Configuration
+        - name: DDNS_MAX_RETRIES
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_MAX_RETRIES
+        - name: DDNS_RETRY_DELAY_SECS
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_RETRY_DELAY_SECS
+        - name: DDNS_MIN_UPDATE_INTERVAL_SECS
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_MIN_UPDATE_INTERVAL_SECS
+        - name: DDNS_EVENT_CHANNEL_CAPACITY
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_EVENT_CHANNEL_CAPACITY
+
+        # Logging Configuration
+        - name: DDNS_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ddnsd-config
+              key: DDNS_LOG_LEVEL
+
+        # Resources
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "100m"
+          limits:
+            memory: "64Mi"
+            cpu: "200m"
+
+        # Health check
+        # The daemon doesn't expose HTTP, so we use process presence
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pgrep ddnsd
+          initialDelaySeconds: 5
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pgrep ddnsd
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 1
+
+        # Startup probe
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pgrep ddnsd
+          initialDelaySeconds: 1
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 12
+
+        # Temporary filesystems
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: run
+          mountPath: /run
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+
+      # Restart policy for pod failures
+      restartPolicy: Always
+
+      # Graceful shutdown period
+      terminationGracePeriodSeconds: 90

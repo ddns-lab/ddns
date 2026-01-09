@@ -1,0 +1,97 @@
+# ddnsd daemon configuration
+# Source: /etc/default/ddnsd
+#
+# This file contains environment variables for the ddns daemon.
+# Modify these values according to your environment.
+#
+# After making changes, restart the service:
+#   systemctl restart ddnsd
+#
+# For full configuration documentation, see:
+#   https://github.com/ddns-lab/ddns/docs/OPS.md
+
+# ============================================================================
+# IP Source Configuration
+# ============================================================================
+
+# IP source type: netlink (Linux), http, or file
+# - netlink: Monitor IP changes via Linux Netlink (requires Linux)
+# - http: Fetch IP from HTTP service (fallback)
+# - file: Read IP from local file (testing)
+DDNS_IP_SOURCE_TYPE=netlink
+
+# Network interface to monitor (for netlink)
+# Example: eth0, ens33, enp0s3
+DDNS_IP_SOURCE_INTERFACE=eth0
+
+# HTTP URL to fetch IP from (for http source)
+# Example: https://api.ipify.org, http://icanhazip.com
+DDNS_IP_SOURCE_URL=
+
+# Poll interval in seconds (for http source, default: 60)
+DDNS_IP_SOURCE_INTERVAL=60
+
+# ============================================================================
+# DNS Provider Configuration
+# ============================================================================
+
+# Provider type: cloudflare (currently supported)
+DDNS_PROVIDER_TYPE=cloudflare
+
+# Cloudflare API token (required)
+# Generate at: https://dash.cloudflare.com/profile/api-tokens
+# Required permissions: Zone - DNS - Edit
+DDNS_PROVIDER_API_TOKEN=your_token_here
+
+# Cloudflare Zone ID (optional, auto-detected if not provided)
+# Find at: https://dash.cloudflare.com -> Your Zone -> Overview
+DDNS_PROVIDER_ZONE_ID=
+
+# Cloudflare Account ID (optional, for some API operations)
+DDNS_PROVIDER_ACCOUNT_ID=
+
+# ============================================================================
+# DNS Records to Update
+# ============================================================================
+
+# Comma-separated list of DNS records to manage
+# Example: example.com,www.example.com,*.example.com
+DDNS_RECORDS=example.com,www.example.com
+
+# ============================================================================
+# State Store Configuration
+# ============================================================================
+
+# State store type: file or memory
+# - file: Persist state to disk (recommended)
+# - memory: Keep state in RAM only (state lost on restart)
+DDNS_STATE_STORE_TYPE=file
+
+# Path to state file (required for file store)
+# Directory will be created if it doesn't exist
+DDNS_STATE_STORE_PATH=/var/lib/ddns/state.json
+
+# ============================================================================
+# Engine Configuration
+# ============================================================================
+
+# Maximum retry attempts for DNS updates (default: 3)
+DDNS_MAX_RETRIES=3
+
+# Delay between retries in seconds (default: 5)
+DDNS_RETRY_DELAY_SECS=5
+
+# Minimum interval between DNS updates for same record in seconds (default: 60)
+# This prevents API storms if IP changes rapidly
+DDNS_MIN_UPDATE_INTERVAL_SECS=60
+
+# Event channel capacity (default: 1000)
+# Internal buffer size for IP change events
+DDNS_EVENT_CHANNEL_CAPACITY=1000
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+# Log level: trace, debug, info, warn, error (default: info)
+DDNS_LOG_LEVEL=info

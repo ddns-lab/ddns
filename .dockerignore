@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+.github
+
+# CI/CD
+.gitlab-ci.yml
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Testing
+tests/
+benches/
+examples/
+
+# Deployment (not needed in image context)
+deploy/
+*.service
+*.default
+install-systemd.sh
+
+# AI
+.ai/
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

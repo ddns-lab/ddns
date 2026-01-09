@@ -1,0 +1,8 @@
+# Kubernetes Namespace for ddnsd
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ddns-system
+  labels:
+    name: ddns-system
+    app: ddnsd

@@ -19,3 +19,21 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Test credentials and sensitive data
+.test.info
+.ssh/
+
+# Node.js artifacts (not used in this Rust project)
+package.json
+package-lock.json
+node_modules/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

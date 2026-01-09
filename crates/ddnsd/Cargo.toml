@@ -1,0 +1,28 @@
+[package]
+name = "ddnsd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Daemon for the DDNS event-driven system"
+
+[[bin]]
+name = "ddnsd"
+path = "src/main.rs"
+
+[dependencies]
+ddns-core = { path = "../ddns-core" }
+ddns-provider-cloudflare = { path = "../ddns-provider-cloudflare", optional = true }
+ddns-ip-netlink = { path = "../ddns-ip-netlink", optional = true }
+
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+[features]
+default = ["cloudflare", "netlink"]
+cloudflare = ["dep:ddns-provider-cloudflare"]
+netlink = ["dep:ddns-ip-netlink"]
+all = ["cloudflare", "netlink"]

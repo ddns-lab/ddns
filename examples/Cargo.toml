@@ -1,0 +1,22 @@
+[package]
+name = "embedded_usage"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "embedded_usage"
+path = "embedded_usage.rs"
+
+[[bin]]
+name = "cloudflare_validation"
+path = "cloudflare-validation.rs"
+
+[dependencies]
+ddns-core = { path = "../crates/ddns-core" }
+ddns-provider-cloudflare = { path = "../crates/ddns-provider-cloudflare" }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tokio-stream = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"

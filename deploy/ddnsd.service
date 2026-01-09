@@ -1,0 +1,47 @@
+[Unit]
+Description=DDNS Daemon
+Documentation=https://github.com/ddns-lab/ddns
+After=network-online.target
+Wants=network-online.target
+ConditionFileNotEmpty=/etc/default/ddnsd
+
+[Service]
+Type=exec
+User=ddns
+Group=ddns
+EnvironmentFile=/etc/default/ddnsd
+
+# Restart policy: restart on runtime errors (exit code 2), not config errors (exit code 1)
+Restart=on-failure
+RestartSec=5s
+
+# Shutdown timeout: must be >= daemon's internal 30s timeout
+TimeoutStopSec=90s
+TimeoutStartSec=30s
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ddns /var/log/ddns
+# Allow access to network for DNS updates and IP detection
+# Allow access to Netlink socket for Linux IP monitoring
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# Resource limits
+MemoryMax=64M
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ddnsd
+
+# OOM policy: don't restart if killed by OOM
+OOMPolicy=continue
+
+[Install]
+WantedBy=multi-user.target
