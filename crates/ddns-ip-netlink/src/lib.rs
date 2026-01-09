@@ -47,6 +47,7 @@ use tokio_stream::Stream;
 
 /// Netlink-based IP source for Linux
 #[cfg(target_os = "linux")]
+#[allow(dead_code)] // Fields and methods are reserved for future Netlink implementation
 pub struct NetlinkIpSource {
     /// Network interface to monitor (None = all interfaces)
     interface: Option<String>,
@@ -59,6 +60,7 @@ pub struct NetlinkIpSource {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)] // Methods are reserved for future Netlink implementation
 impl NetlinkIpSource {
     /// Create a new Netlink IP source
     ///
