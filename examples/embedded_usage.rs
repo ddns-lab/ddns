@@ -7,8 +7,8 @@
 
 use ddns_core::config::RecordConfig;
 use ddns_core::{
-    traits::{DnsProvider, IpChangeEvent, IpSource, StateStore},
     DdnsConfig, DdnsEngine, Result,
+    traits::{DnsProvider, IpChangeEvent, IpSource, StateStore},
 };
 use std::net::IpAddr;
 use std::pin::Pin;
