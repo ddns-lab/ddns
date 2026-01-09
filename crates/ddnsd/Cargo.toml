@@ -15,6 +15,7 @@ path = "src/main.rs"
 ddns-core = { path = "../ddns-core" }
 ddns-provider-cloudflare = { path = "../ddns-provider-cloudflare", optional = true }
 ddns-ip-netlink = { path = "../ddns-ip-netlink", optional = true }
+ddns-ip-http = { path = "../ddns-ip-http", optional = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -25,4 +26,5 @@ anyhow = { workspace = true }
 default = ["cloudflare", "netlink"]
 cloudflare = ["dep:ddns-provider-cloudflare"]
 netlink = ["dep:ddns-ip-netlink"]
-all = ["cloudflare", "netlink"]
+http = ["dep:ddns-ip-http"]
+all = ["cloudflare", "netlink", "http"]

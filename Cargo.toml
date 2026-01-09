@@ -5,6 +5,7 @@ members = [
     "crates/ddnsd",
     "crates/ddns-provider-cloudflare",
     "crates/ddns-ip-netlink",
+    "crates/ddns-ip-http",
     "examples",
 ]
 

@@ -59,7 +59,7 @@ use anyhow::Result;
 use std::env;
 use std::process::ExitCode;
 use std::time::Duration;
-use tracing::{Level, error, info, warn};
+use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[cfg(unix)]
@@ -102,6 +102,8 @@ struct Config {
     state_store_path: Option<String>,
     max_retries: Option<usize>,
     retry_delay_secs: Option<u64>,
+    startup_delay_secs: Option<u64>,
+    min_update_interval_secs: Option<u64>,
     log_level: String,
 }
 
@@ -135,6 +137,12 @@ impl Config {
             retry_delay_secs: env::var("DDNS_RETRY_DELAY_SECS")
                 .ok()
                 .map(|s| s.parse().unwrap_or(5)),
+            startup_delay_secs: env::var("DDNS_STARTUP_DELAY_SECS")
+                .ok()
+                .map(|s| s.parse().unwrap_or(0)),
+            min_update_interval_secs: env::var("DDNS_MIN_UPDATE_INTERVAL_SECS")
+                .ok()
+                .map(|s| s.parse().unwrap_or(60)),
             log_level: env::var("DDNS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
         })
     }
@@ -434,27 +442,115 @@ fn main() -> ExitCode {
 
 /// Run the daemon
 async fn run_daemon(config: Config) -> Result<()> {
+    use ddns_core::config::{
+        DdnsConfig, EngineConfig, IpSourceConfig, ProviderConfig, RecordConfig,
+        StateStoreConfig,
+    };
+    use ddns_core::{DdnsEngine, ProviderRegistry};
+
     // Create provider registry
-    let _registry = ddns_core::ProviderRegistry::new();
+    let registry = ProviderRegistry::new();
 
     // Register built-in providers
-    // Note: Provider crates should provide a `register()` function
     #[cfg(feature = "cloudflare")]
     {
         info!("Registering Cloudflare provider");
-        // ddns_provider_cloudflare::register(&registry);
-        warn!("Cloudflare provider feature enabled but not yet implemented");
+        ddns_provider_cloudflare::register(&registry);
     }
 
     #[cfg(feature = "netlink")]
     {
         info!("Registering Netlink IP source");
-        // ddns_ip_netlink::register(&registry);
-        warn!("Netlink IP source feature enabled but not yet implemented");
+        ddns_ip_netlink::register(&registry);
     }
 
-    // TODO: Create components from config
-    // For now, we'll just log what would be created
+    #[cfg(feature = "http")]
+    {
+        info!("Registering HTTP IP source (fallback)");
+        ddns_ip_http::register(&registry);
+    }
+
+    // Create IP source config
+    let ip_source_config = match config.ip_source_type.as_str() {
+        "netlink" => IpSourceConfig::Netlink {
+            interface: config.ip_source_interface.clone(),
+            version: None,
+        },
+        "http" => IpSourceConfig::Http {
+            url: config.ip_source_url.unwrap_or_else(|| {
+                "https://api.ipify.org".to_string()
+            }),
+            interval_secs: config.ip_source_interval.unwrap_or(60),
+        },
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unknown IP source type: {}",
+                config.ip_source_type
+            ))
+        }
+    };
+
+    // Create provider config
+    let provider_config = match config.provider_type.as_str() {
+        "cloudflare" => ProviderConfig::Cloudflare {
+            api_token: config.provider_api_token.clone(),
+            zone_id: config.provider_zone_id.clone(),
+            account_id: None,
+        },
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unknown provider type: {}",
+                config.provider_type
+            ))
+        }
+    };
+
+    // Create state store config
+    let state_store_config = match config.state_store_type.as_str() {
+        "file" => StateStoreConfig::File {
+            path: config
+                .state_store_path
+                .clone()
+                .unwrap_or_else(|| "/var/lib/ddns/state.json".to_string()),
+        },
+        "memory" => StateStoreConfig::Memory,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unknown state store type: {}",
+                config.state_store_type
+            ))
+        }
+    };
+
+    // Create record configs
+    let record_configs: Vec<RecordConfig> = config
+        .records
+        .iter()
+        .map(|name| RecordConfig::new(name.as_str()))
+        .collect();
+
+    // Create engine config
+    let engine_config = EngineConfig {
+        max_retries: config.max_retries.unwrap_or(3),
+        retry_delay_secs: config.retry_delay_secs.unwrap_or(5),
+        startup_delay_secs: config.startup_delay_secs.unwrap_or(0),
+        min_update_interval_secs: config.min_update_interval_secs.unwrap_or(60),
+        event_channel_capacity: 100,
+        metadata: std::collections::HashMap::new(),
+    };
+
+    let ddns_config = DdnsConfig {
+        ip_source: ip_source_config,
+        provider: provider_config,
+        state_store: state_store_config,
+        records: record_configs,
+        engine: engine_config,
+    };
+
+    // Create components from registry
+    let ip_source = registry.create_ip_source(&ddns_config.ip_source)?;
+    let provider = registry.create_provider(&ddns_config.provider)?;
+    let state_store = registry.create_state_store(&ddns_config.state_store)?;
 
     info!("IP source type: {}", config.ip_source_type);
     info!("Provider type: {}", config.provider_type);
@@ -464,21 +560,25 @@ async fn run_daemon(config: Config) -> Result<()> {
         info!("Managing record: {}", record);
     }
 
-    // TODO: Create and run engine
-    // let ip_source = registry.create_ip_source(&ip_source_config)?;
-    // let provider = registry.create_provider(&provider_config)?;
-    // let state_store = registry.create_state_store(&state_store_config)?;
+    // Create engine
+    let (engine, mut event_rx) = DdnsEngine::new(
+        ip_source,
+        provider,
+        state_store,
+        ddns_config,
+    )?;
 
-    // let engine = ddns_core::DdnsEngine::new(
-    //     ip_source,
-    //     provider,
-    //     state_store,
-    //     ddns_config,
-    //     None,
-    // )?;
+    // Spawn event listener (optional, for logging)
+    let event_listener = tokio::spawn(async move {
+        while let Some(event) = event_rx.recv().await {
+            info!("[Engine Event] {:?}", event);
+        }
+    });
 
-    // info!("Starting DDNS engine");
-    // engine.run().await?;
+    info!("Starting DDNS engine");
+    let engine_handle = tokio::spawn(async move {
+        engine.run().await
+    });
 
     info!("Daemon initialized successfully");
     info!("Ready to monitor IP changes");
@@ -490,6 +590,12 @@ async fn run_daemon(config: Config) -> Result<()> {
         Ok(signal) => {
             info!("Received shutdown signal: {}", signal);
             info!("Shutting down daemon");
+
+            // Drop engine handle to trigger graceful shutdown
+            drop(engine_handle);
+
+            // Wait for event listener to finish
+            drop(event_listener);
         }
         Err(e) => {
             error!("Shutdown error: {}", e);
