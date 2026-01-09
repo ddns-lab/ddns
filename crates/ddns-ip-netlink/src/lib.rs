@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "linux")]
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 #[cfg(target_os = "linux")]
 use tokio_stream::Stream;
 #[cfg(target_os = "linux")]
@@ -140,9 +140,8 @@ impl NetlinkIpSource {
                 match ip {
                     IpAddr::V4(v4) => !v4.is_loopback() && !v4.is_unspecified(),
                     IpAddr::V6(v6) => {
-                        !v6.is_loopback()
-                            && !v6.is_unspecified()
-                            // Accept unique local (ULA) if no global
+                        !v6.is_loopback() && !v6.is_unspecified()
+                        // Accept unique local (ULA) if no global
                     }
                 }
             })
@@ -280,18 +279,14 @@ impl IpSource for NetlinkIpSource {
             tracing::info!("Starting Netlink IP monitoring");
 
             // Create Netlink connection
-            let connection =
-                match rtnetlink::new_connection() {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        tracing::error!("Failed to create Netlink connection: {}", e);
-                        let _ = tx.send(IpChangeEvent::new(
-                            IpAddr::from([0, 0, 0, 0]),
-                            None,
-                        ));
-                        return;
-                    }
-                };
+            let connection = match rtnetlink::new_connection() {
+                Ok(conn) => conn,
+                Err(e) => {
+                    tracing::error!("Failed to create Netlink connection: {}", e);
+                    let _ = tx.send(IpChangeEvent::new(IpAddr::from([0, 0, 0, 0]), None));
+                    return;
+                }
+            };
 
             let (mut connection, handle, mut messages) = connection;
 
@@ -327,16 +322,16 @@ impl IpSource for NetlinkIpSource {
             let rtnlgrp_ipv4_ifaddr = 5;
             let rtnlgrp_ipv6_ifaddr = 9;
 
-            if let Err(e) = sock.join_multicast_group(
-                &socket2::SockAddr::new_netlink(rtnlgrp_ipv4_ifaddr),
-            ) {
+            if let Err(e) =
+                sock.join_multicast_group(&socket2::SockAddr::new_netlink(rtnlgrp_ipv4_ifaddr))
+            {
                 tracing::warn!("Failed to join IPv4 address multicast group: {}", e);
             }
 
             if version_filter.unwrap_or(ConfigIpVersion::Both) != ConfigIpVersion::V4 {
-                if let Err(e) = sock.join_multicast_group(
-                    &socket2::SockAddr::new_netlink(rtnlgrp_ipv6_ifaddr),
-                ) {
+                if let Err(e) =
+                    sock.join_multicast_group(&socket2::SockAddr::new_netlink(rtnlgrp_ipv6_ifaddr))
+                {
                     tracing::warn!("Failed to join IPv6 address multicast group: {}", e);
                 }
             }
@@ -389,7 +384,8 @@ impl IpSource for NetlinkIpSource {
                                 Ok(mut addresses) => {
                                     while let Some(Ok(msg)) = addresses.next().await {
                                         for nla in msg.attributes {
-                                            if let rtnetlink::AddressAttribute::Address(addr) = nla {
+                                            if let rtnetlink::AddressAttribute::Address(addr) = nla
+                                            {
                                                 all_addresses.push(addr);
                                             }
                                         }
@@ -429,7 +425,13 @@ impl IpSource for NetlinkIpSource {
                     .min_by_key(|ip| {
                         // Prefer global addresses
                         match ip {
-                            IpAddr::V4(v4) => if v4.is_private() { 1 } else { 0 },
+                            IpAddr::V4(v4) => {
+                                if v4.is_private() {
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
                             IpAddr::V6(v6) => {
                                 if v6.is_loopback() {
                                     3
@@ -452,11 +454,7 @@ impl IpSource for NetlinkIpSource {
                         let last = *last_event.lock().await;
 
                         if now.duration_since(last) >= debounce_duration {
-                            tracing::info!(
-                                "IP changed: {:?} -> {:?}",
-                                previous_ip,
-                                new_ip
-                            );
+                            tracing::info!("IP changed: {:?} -> {:?}", previous_ip, new_ip);
 
                             let event = IpChangeEvent::new(new_ip, previous_ip);
                             if tx.send(event).is_err() {

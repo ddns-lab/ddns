@@ -20,11 +20,11 @@
 // Fetches current IP from external services (e.g., ifconfig.me, icanhazip.com)
 // and polls at a configurable interval for changes.
 
+use ddns_core::ProviderRegistry;
 use ddns_core::config::IpSourceConfig;
 use ddns_core::config::IpVersion as ConfigIpVersion;
 use ddns_core::traits::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion as TraitsIpVersion};
 use ddns_core::{Error, Result};
-use ddns_core::ProviderRegistry;
 
 use std::net::IpAddr;
 use std::pin::Pin;
@@ -41,9 +41,9 @@ const DEFAULT_POLL_INTERVAL_SECS: u64 = 60;
 /// Default IP check services (for future failover support)
 #[allow(dead_code)]
 const DEFAULT_IP_SERVICES: &[&str] = &[
-    "https://api.ipify.org",           // 43KB/day free, returns plain text IP
-    "https://ifconfig.me/ip",          // No rate limit documented
-    "https://icanhazip.com",           // No rate limit documented
+    "https://api.ipify.org",  // 43KB/day free, returns plain text IP
+    "https://ifconfig.me/ip", // No rate limit documented
+    "https://icanhazip.com",  // No rate limit documented
 ];
 
 /// HTTP-based IP source (fallback for non-Linux or CI)
@@ -213,11 +213,17 @@ impl IpSource for HttpIpSource {
                                             };
 
                                             if acceptable && last_known_ip != Some(ip) {
-                                                tracing::info!("IP changed: {:?} -> {:?}", last_known_ip, ip);
+                                                tracing::info!(
+                                                    "IP changed: {:?} -> {:?}",
+                                                    last_known_ip,
+                                                    ip
+                                                );
 
                                                 let event = IpChangeEvent::new(ip, last_known_ip);
                                                 if tx.send(event).is_err() {
-                                                    tracing::error!("Receiver dropped, stopping monitor");
+                                                    tracing::error!(
+                                                        "Receiver dropped, stopping monitor"
+                                                    );
                                                     break;
                                                 }
 
@@ -226,7 +232,11 @@ impl IpSource for HttpIpSource {
                                             }
                                         }
                                         Err(e) => {
-                                            tracing::warn!("Failed to parse IP address '{}': {}", ip_text, e);
+                                            tracing::warn!(
+                                                "Failed to parse IP address '{}': {}",
+                                                ip_text,
+                                                e
+                                            );
                                         }
                                     }
                                 }
@@ -272,8 +282,7 @@ impl IpSourceFactory for HttpFactory {
                 let interval = Duration::from_secs(*interval_secs);
 
                 Ok(Box::new(HttpIpSource::with_interval(
-                    url,
-                    None, // version filtering can be added later
+                    url, None, // version filtering can be added later
                     interval,
                 )))
             }

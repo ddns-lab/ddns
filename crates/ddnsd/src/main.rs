@@ -59,7 +59,7 @@ use anyhow::Result;
 use std::env;
 use std::process::ExitCode;
 use std::time::Duration;
-use tracing::{error, info, Level};
+use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
 #[cfg(unix)]
@@ -443,8 +443,7 @@ fn main() -> ExitCode {
 /// Run the daemon
 async fn run_daemon(config: Config) -> Result<()> {
     use ddns_core::config::{
-        DdnsConfig, EngineConfig, IpSourceConfig, ProviderConfig, RecordConfig,
-        StateStoreConfig,
+        DdnsConfig, EngineConfig, IpSourceConfig, ProviderConfig, RecordConfig, StateStoreConfig,
     };
     use ddns_core::{DdnsEngine, ProviderRegistry};
 
@@ -477,16 +476,16 @@ async fn run_daemon(config: Config) -> Result<()> {
             version: None,
         },
         "http" => IpSourceConfig::Http {
-            url: config.ip_source_url.unwrap_or_else(|| {
-                "https://api.ipify.org".to_string()
-            }),
+            url: config
+                .ip_source_url
+                .unwrap_or_else(|| "https://api.ipify.org".to_string()),
             interval_secs: config.ip_source_interval.unwrap_or(60),
         },
         _ => {
             return Err(anyhow::anyhow!(
                 "Unknown IP source type: {}",
                 config.ip_source_type
-            ))
+            ));
         }
     };
 
@@ -501,7 +500,7 @@ async fn run_daemon(config: Config) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Unknown provider type: {}",
                 config.provider_type
-            ))
+            ));
         }
     };
 
@@ -518,7 +517,7 @@ async fn run_daemon(config: Config) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Unknown state store type: {}",
                 config.state_store_type
-            ))
+            ));
         }
     };
 
@@ -561,12 +560,7 @@ async fn run_daemon(config: Config) -> Result<()> {
     }
 
     // Create engine
-    let (engine, mut event_rx) = DdnsEngine::new(
-        ip_source,
-        provider,
-        state_store,
-        ddns_config,
-    )?;
+    let (engine, mut event_rx) = DdnsEngine::new(ip_source, provider, state_store, ddns_config)?;
 
     // Spawn event listener (optional, for logging)
     let event_listener = tokio::spawn(async move {
@@ -576,9 +570,7 @@ async fn run_daemon(config: Config) -> Result<()> {
     });
 
     info!("Starting DDNS engine");
-    let engine_handle = tokio::spawn(async move {
-        engine.run().await
-    });
+    let engine_handle = tokio::spawn(async move { engine.run().await });
 
     info!("Daemon initialized successfully");
     info!("Ready to monitor IP changes");
