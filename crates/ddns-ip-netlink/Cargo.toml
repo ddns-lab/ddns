@@ -18,8 +18,9 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
-# Netlink library (Linux only, to be added when implementing)
-#[target.'cfg(target_os = "linux")'.dependencies]
-# netlink-sys = "0.8"
-# netlink-packet-route = "0.20"
-# futures = "0.3"
+# Netlink library (Linux only)
+[target.'cfg(target_os = "linux")'.dependencies]
+rtnetlink = "0.14"
+futures = "0.3"
+libc = "0.2"
+socket2 = "0.5"
