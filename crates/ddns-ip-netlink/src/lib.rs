@@ -29,6 +29,7 @@
 // This crate only compiles on Linux due to Netlink being a Linux-specific feature.
 
 use ddns_core::config::IpSourceConfig;
+#[allow(unused_imports)]
 use ddns_core::traits::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion as TraitsIpVersion};
 use ddns_core::{Error, Result};
 
