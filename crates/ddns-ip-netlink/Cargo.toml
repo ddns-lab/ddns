@@ -20,6 +20,5 @@ anyhow = { workspace = true }
 
 # Netlink library (Linux only)
 [target.'cfg(target_os = "linux")'.dependencies]
-neli = "0.7"
-futures = "0.3"
+socket2 = { version = "0.5", features = ["all"] }
 libc = "0.2"

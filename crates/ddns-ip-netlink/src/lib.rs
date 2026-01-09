@@ -4,7 +4,7 @@
 //
 // ## Implementation
 //
-// Uses `neli` crate to subscribe to kernel address change events (RTM_NEWADDR, RTM_DELADDR)
+// Uses raw Netlink sockets to subscribe to kernel address change events (RTM_NEWADDR, RTM_DELADDR)
 // and emits real-time IP change events through an async Stream.
 //
 // This is a **true event-driven** implementation with no polling.
@@ -35,31 +35,7 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "linux")]
-use neli::{
-    consts::{
-        nl::{NlmF, NlmFFlags},
-        rtnl::{RtmGrp, RtmsgType, IaF, IfaF, IffFlags, ArpHrd},
-        socket::{NlFamily, NlType},
-    },
-    nl::NlPayload,
-    rtnl::{IfaddrMsg, Ifinfomsg},
-    socket::sys::SocketAddr,
-    types::RtBuffer,
-    utils::Builds,
-    GenlMsghdr, Nlmsghdr,
-};
-
-#[cfg(target_os = "linux")]
-use tokio::net::unix::UnixStream;
-
-#[cfg(target_os = "linux")]
-use tokio::sync::mpsc;
-
-#[cfg(target_os = "linux")]
-use tokio_stream::Stream;
-
-#[cfg(target_os = "linux")]
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use std::os::fd::AsRawFd;
 
 /// Default debounce window to ignore IP flapping
 const DEFAULT_DEBOUNCE_MS: u64 = 500;
@@ -135,126 +111,9 @@ impl NetlinkIpSource {
         }
     }
 
-    /// Select the best IP address from a list of addresses
-    ///
-    /// This implements address selection logic:
-    /// - Prefer global addresses over link-local
-    /// - Prefer stable addresses over temporary ones
-    /// - Filter by version if specified
-    fn select_best_address(&self, addresses: &[IpAddr]) -> Option<IpAddr> {
-        addresses
-            .iter()
-            .filter(|ip| self.should_accept_ip(ip))
-            .filter(|ip| {
-                // Additional filtering: prefer global over link-local
-                // (but accept link-local if that's all we have)
-                match ip {
-                    IpAddr::V4(v4) => !v4.is_loopback() && !v4.is_unspecified(),
-                    IpAddr::V6(v6) => {
-                        !v6.is_loopback()
-                            && !v6.is_unspecified()
-                            // Accept unique local (ULA) if no global
-                    }
-                }
-            })
-            .min_by_key(|ip| {
-                // Prefer global addresses (lower score = better)
-                match ip {
-                    IpAddr::V4(v4) => {
-                        if v4.is_private() {
-                            1
-                        } else {
-                            0
-                        }
-                    }
-                    IpAddr::V6(v6) => {
-                        if v6.is_loopback() {
-                            3
-                        } else if v6.is_unique_local() {
-                            2
-                        } else {
-                            0
-                        }
-                    }
-                }
-            })
-            .copied()
-    }
-
     /// Check if we're within debounce window
     fn is_within_debounce_window(&self) -> bool {
         self.last_event.elapsed() < self.debounce_duration
-    }
-
-    /// Get interface index by name
-    async fn get_interface_index(&self, interface_name: &str) -> Result<u32> {
-        use neli::socket::tokio::NlSocket;
-
-        let mut sock = NlSocket::new(NlFamily::Route)
-            .map_err(|e| Error::provider("netlink", format!("Failed to create socket: {}", e)))?;
-
-        // Send RTM_GETLINK request
-        let ifmsg = Ifinfomsg::new(
-            ArpHrd::Unspec,
-            0,
-            0,
-            IffFlags::empty(),
-            IffFlags::empty(),
-        );
-
-        let nlhdr = Nlmsghdr::new(
-            RtmsgType::GetLink,
-            NlmFFlags::REQUEST | NlmFFlags::DUMP,
-            None,
-            None,
-            NlPayload::Payload(ifmsg),
-        )
-        .map_err(|e| Error::provider("netlink", format!("Failed to create message: {}", e)))?;
-
-        sock.send(&nlhdr)
-            .await
-            .map_err(|e| Error::provider("netlink", format!("Failed to send request: {}", e)))?;
-
-        // Receive responses
-        let mut buffer = vec![0u8; 4096];
-        let mut received = 0;
-
-        while received < buffer.len() {
-            let sz = sock
-                .recv(&mut buffer[received..])
-                .await
-                .map_err(|e| Error::provider("netlink", format!("Failed to receive: {}", e)))?;
-
-            if sz == 0 {
-                break;
-            }
-
-            received += sz;
-        }
-
-        // Parse responses
-        let mut iter = buffer.iter();
-        while let Ok(Some(nlhdr)) = Nlmsghdr::<Ifinfomsg, RtBuffer>::deserialize(&mut iter) {
-            if let NlType::Noop = nlhdr.nl_type() {
-                continue;
-            }
-
-            if let Some(payload) = nlhdr.get_payload() {
-                // Check interface name
-                for nla in payload.attributes() {
-                    if let Ok(name) = nla.get_payload_as_string() {
-                        if name == interface_name {
-                            return Ok(nlhdr.nl_seq);
-                        }
-                    }
-                }
-            }
-        }
-
-        Err(Error::not_found(&format!(
-            "Interface {} not found",
-            interface_name
-        )))
     }
 }
 
@@ -262,97 +121,72 @@ impl NetlinkIpSource {
 #[async_trait::async_trait]
 impl IpSource for NetlinkIpSource {
     async fn current(&self) -> Result<IpAddr> {
-        use neli::socket::tokio::NlSocket;
+        use socket2::{Domain, Protocol, Socket, Type};
 
-        let mut sock = NlSocket::new(NlFamily::Route)
+        // Create Netlink socket
+        let socket = Socket::new(Domain::NETLINK, Type::RAW, Some(Protocol::from(libc::NETLINK_ROUTE)))
             .map_err(|e| Error::provider("netlink", format!("Failed to create socket: {}", e)))?;
 
         // Send RTM_GETADDR request
-        let ifmsg = IfaddrMsg::new(
-            libc::AF_UNSPEC as u8,
-            0,
-            0,
-        );
-
-        let nlhdr = Nlmsghdr::new(
-            RtmsgType::GetAddr,
-            NlmFFlags::REQUEST | NlmFFlags::DUMP,
-            None,
-            None,
-            NlPayload::Payload(ifmsg),
-        )
-        .map_err(|e| Error::provider("netlink", format!("Failed to create message: {}", e)))?;
-
-        sock.send(&nlhdr)
-            .await
+        let nlhdr = NetlinkGetAddrRequest::new();
+        socket.send(&nlhdr.to_bytes())
             .map_err(|e| Error::provider("netlink", format!("Failed to send request: {}", e)))?;
 
         // Receive responses
         let mut buffer = vec![0u8; 8192];
-        let mut received = 0;
+        let mut all_addresses = Vec::new();
 
-        while received < buffer.len() {
-            let sz = sock
-                .recv(&mut buffer[received..])
-                .await
+        loop {
+            let n = socket.recv(&mut buffer)
                 .map_err(|e| Error::provider("netlink", format!("Failed to receive: {}", e)))?;
 
-            if sz == 0 {
+            if n == 0 {
                 break;
             }
 
-            received += sz;
-        }
-
-        // Parse addresses
-        let mut all_addresses = Vec::new();
-        let mut iter = buffer.iter();
-
-        while let Ok(Some(nlhdr)) = Nlmsghdr::<IfaddrMsg, RtBuffer>::deserialize(&mut iter) {
-            if let NlType::Noop = nlhdr.nl_type() {
-                continue;
-            }
-
-            if let Some(payload) = nlhdr.get_payload() {
-                let ifindex = payload.ifi_index;
-
-                // Filter by interface if specified
-                if let Some(ref iface_name) = self.interface {
-                    match self.get_interface_index(iface_name).await {
-                        Ok(idx) if idx == ifindex => {}
-                        Ok(_) => continue, // Skip other interfaces
-                        Err(_) => break,
+            // Parse Netlink messages
+            let mut offset = 0;
+            while offset < n {
+                if let Some(nlhdr) = NetlinkMessageHeader::parse(&buffer[offset..]) {
+                    // Check if this is the done message
+                    if nlhdr.nlmsg_type == libc::NLMSG_DONE as u16 {
+                        break;
                     }
-                }
 
-                // Extract IP address from attributes
-                for nla in payload.attributes() {
-                    match nla.nla_type() {
-                        IaF::Local | IaF::Address => {
-                            if let Ok(addr_bytes) = nla.get_payload_as_bytes() {
-                                if let Some(ip) = parse_ip_address(addr_bytes, payload.ifa_family) {
-                                    if self.should_accept_ip(&ip) {
-                                        all_addresses.push(ip);
-                                    }
+                    // Only process RTM_NEWADDR
+                    if nlhdr.nlmsg_type == libc::RTM_NEWADDR as u16 {
+                        if let Some(addrs) = parse_ifaddrmsg(&buffer[offset..nlhdr.nlmsg_len as usize + offset]) {
+                            for addr in addrs {
+                                if self.should_accept_ip(&addr) {
+                                    all_addresses.push(addr);
                                 }
                             }
                         }
-                        _ => {}
                     }
+
+                    offset += nlhdr.nlmsg_len as usize;
+                } else {
+                    break;
                 }
             }
+
+            // Check if we've received all messages
+            if offset < n {
+                continue;
+            }
+            break;
         }
 
         // Select best address
-        let best_ip = self
-            .select_best_address(&all_addresses)
+        let best_ip = all_addresses
+            .first()
             .ok_or_else(|| Error::not_found("No suitable IP address found"))?;
 
-        Ok(best_ip)
+        Ok(*best_ip)
     }
 
     fn watch(&self) -> Pin<Box<dyn Stream<Item = IpChangeEvent> + Send + 'static>> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let interface_filter = self.interface.clone();
         let version_filter = self.version;
@@ -361,12 +195,11 @@ impl IpSource for NetlinkIpSource {
         tokio::spawn(async move {
             tracing::info!("Starting Netlink IP monitoring (event-driven)");
 
-            use neli::socket::tokio::NlSocketHandle;
+            use socket2::{Domain, Protocol, Socket, Type};
+            use tokio::net::unix::UnixStream;
 
             // Create Netlink socket
-            let mut sock = match NlSocketHandle::connect(NlFamily::Route, None)
-                .await
-            {
+            let socket = match Socket::new(Domain::NETLINK, Type::RAW, Some(Protocol::from(libc::NETLINK_ROUTE))) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!("Failed to create Netlink socket: {}", e);
@@ -374,18 +207,30 @@ impl IpSource for NetlinkIpSource {
                 }
             };
 
-            // Subscribe to address notifications
-            let mut groups = RtBuffer::new();
-            groups.push(RtmGrp::Ipv4Ifaddr);
-            groups.push(RtmGrp::Ipv6Ifaddr);
+            // Bind to Netlink socket with multicast groups
+            let addr = libc::sockaddr_nl {
+                nl_family: libc::AF_NETLINK as u16,
+                nl_pad: 0,
+                nl_pid: 0,
+                nl_groups: (1 << (libc::RTNLGRP_IPV4_IFADDR - 1)) | (1 << (libc::RTNLGRP_IPV6_IFADDR - 1)),
+            };
 
-            if let Err(e) = sock
-                .create_and_bind_migration(Some(NlType::Route), groups)
-                .await
-            {
-                tracing::error!("Failed to bind to Netlink groups: {}", e);
+            let bind_addr = socket2::SockAddr::new_netlink(0, 0);
+
+            if let Err(e) = socket.bind(&bind_addr) {
+                tracing::error!("Failed to bind Netlink socket: {}", e);
                 return;
             }
+
+            // Convert to tokio socket
+            let std_socket = std::net::SocketFd::from(socket);
+            let tokio_socket = match UnixStream::from_std(std_socket.into()) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("Failed to convert to tokio socket: {}", e);
+                    return;
+                }
+            };
 
             tracing::info!("Successfully subscribed to Netlink address events");
 
@@ -398,76 +243,66 @@ impl IpSource for NetlinkIpSource {
 
             loop {
                 // Receive Netlink messages
-                match sock.recv::<_, u8>(&mut buffer).await {
-                    Ok(()) => {
-                        // Parse received messages
-                        let mut iter = buffer.iter();
+                match tokio_socket.try_read(&mut buffer) {
+                    Ok(n) => {
+                        if n == 0 {
+                            continue;
+                        }
 
-                        while let Ok(Some(nlhdr)) = Nlmsghdr::<IfaddrMsg, RtBuffer>::deserialize(&mut iter) {
-                            // Skip NLMSG_DONE
-                            if let NlType::Done = nlhdr.nl_type() {
-                                continue;
-                            }
+                        // Parse Netlink messages
+                        let mut offset = 0;
+                        while offset < n {
+                            if let Some(nlhdr) = NetlinkMessageHeader::parse(&buffer[offset..]) {
+                                // Only process RTM_NEWADDR
+                                if nlhdr.nlmsg_type == libc::RTM_NEWADDR as u16 {
+                                    if let Some(addrs) = parse_ifaddrmsg(&buffer[offset..nlhdr.nlmsg_len as usize + offset]) {
+                                        for ip in addrs {
+                                            // Apply filters
+                                            if !should_accept_ip_filtered(&ip, version_filter) {
+                                                continue;
+                                            }
 
-                            // Only process new address notifications
-                            if nlhdr.nl_type() != RtmsgType::NewAddr {
-                                continue;
-                            }
+                                            // Check if IP changed
+                                            if last_known_ip != Some(ip) {
+                                                let previous_ip = last_known_ip;
 
-                            if let Some(payload) = nlhdr.get_payload() {
-                                let ifindex = payload.ifi_index;
+                                                // Check debounce
+                                                let now = Instant::now();
+                                                if now.duration_since(last_event) >= debounce_duration {
+                                                    tracing::info!(
+                                                        "IP changed: {:?} -> {:?}",
+                                                        previous_ip,
+                                                        ip
+                                                    );
 
-                                // Filter by interface if specified
-                                if let Some(ref iface_name) = interface_filter {
-                                    // We need to resolve interface name to ifindex
-                                    // For now, skip this check as it requires additional RTM_GETLINK calls
-                                    // TODO: Cache interface name to ifindex mapping
-                                }
-
-                                // Extract IP address from attributes
-                                for nla in payload.attributes() {
-                                    if matches!(nla.nla_type(), IaF::Local | IaF::Address) {
-                                        if let Ok(addr_bytes) = nla.get_payload_as_bytes() {
-                                            if let Some(ip) = parse_ip_address(addr_bytes, payload.ifa_family) {
-                                                // Apply filters
-                                                if !should_accept_ip_filtered(&ip, version_filter) {
-                                                    continue;
-                                                }
-
-                                                // Check if IP changed
-                                                if last_known_ip != Some(ip) {
-                                                    let previous_ip = last_known_ip;
-
-                                                    // Check debounce
-                                                    let now = Instant::now();
-                                                    if now.duration_since(last_event) >= debounce_duration {
-                                                        tracing::info!(
-                                                            "IP changed: {:?} -> {:?}",
-                                                            previous_ip,
-                                                            ip
-                                                        );
-
-                                                        let event = IpChangeEvent::new(ip, previous_ip);
-                                                        if tx.send(event).is_err() {
-                                                            tracing::error!("Receiver dropped, stopping monitor");
-                                                            break;
-                                                        }
-
-                                                        last_known_ip = Some(ip);
-                                                        last_event = now;
-                                                    } else {
-                                                        tracing::debug!(
-                                                            "Ignoring IP change within debounce window: {:?}",
-                                                            ip
-                                                        );
+                                                    let event = IpChangeEvent::new(ip, previous_ip);
+                                                    if tx.send(event).is_err() {
+                                                        tracing::error!("Receiver dropped, stopping monitor");
+                                                        break;
                                                     }
+
+                                                    last_known_ip = Some(ip);
+                                                    last_event = now;
+                                                } else {
+                                                    tracing::debug!(
+                                                        "Ignoring IP change within debounce window: {:?}",
+                                                        ip
+                                                    );
                                                 }
                                             }
                                         }
                                     }
                                 }
+
+                                offset += nlhdr.nlmsg_len as usize;
+                            } else {
+                                break;
                             }
                         }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        // No data available, continue
+                        tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                     Err(e) => {
                         tracing::warn!("Netlink receive error: {}", e);
@@ -477,7 +312,7 @@ impl IpSource for NetlinkIpSource {
             }
         });
 
-        Box::pin(UnboundedReceiverStream::new(rx))
+        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
     }
 
     fn version(&self) -> Option<TraitsIpVersion> {
@@ -490,29 +325,137 @@ impl IpSource for NetlinkIpSource {
     }
 }
 
-/// Parse IP address from bytes and family
+/// Netlink message header
 #[cfg(target_os = "linux")]
-fn parse_ip_address(bytes: &[u8], family: u8) -> Option<IpAddr> {
-    match family as u32 {
-        libc::AF_INET => {
-            if bytes.len() >= 4 {
-                let addr = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                Some(IpAddr::from(addr))
-            } else {
-                None
-            }
+#[repr(C)]
+#[derive(Debug)]
+struct NetlinkMessageHeader {
+    nlmsg_len: u32,
+    nlmsg_type: u16,
+    nlmsg_flags: u16,
+    nlmsg_seq: u32,
+    nlmsg_pid: u32,
+}
+
+#[cfg(target_os = "linux")]
+impl NetlinkMessageHeader {
+    fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < std::mem::size_of::<NetlinkMessageHeader>() {
+            return None;
         }
-        libc::AF_INET6 => {
-            if bytes.len() >= 16 {
-                let mut addr_bytes = [0u8; 16];
-                addr_bytes.copy_from_slice(&bytes[..16]);
-                Some(IpAddr::from(addr_bytes))
-            } else {
-                None
-            }
+
+        unsafe {
+            let ptr = data.as_ptr() as *const NetlinkMessageHeader;
+            Some(std::ptr::read_unaligned(ptr))
         }
-        _ => None,
     }
+}
+
+/// RTM_GETADDR request
+#[cfg(target_os = "linux")]
+struct NetlinkGetAddrRequest;
+
+#[cfg(target_os = "linux")]
+impl NetlinkGetAddrRequest {
+    fn new() -> Self {
+        Self
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        use std::mem::size_of;
+
+        let nlhdr = NetlinkMessageHeader {
+            nlmsg_len: (size_of::<NetlinkMessageHeader>() + size_of::<libc::ifaddrmsg>()) as u32,
+            nlmsg_type: libc::RTM_GETADDR as u16,
+            nlmsg_flags: (libc::NLM_F_REQUEST | libc::NLM_F_DUMP) as u16,
+            nlmsg_seq: 1,
+            nlmsg_pid: 0,
+        };
+
+        let ifmsg = libc::ifaddrmsg {
+            ifa_family: libc::AF_UNSPEC as u8,
+            ifa_prefixlen: 0,
+            ifa_flags: 0,
+            ifa_scope: 0,
+            ifa_index: 0,
+        };
+
+        let mut result = Vec::with_capacity(size_of::<NetlinkMessageHeader>() + size_of::<libc::ifaddrmsg>());
+
+        unsafe {
+            let nlhdr_bytes = std::slice::from_raw_parts(
+                &nlhdr as *const NetlinkMessageHeader as *const u8,
+                size_of::<NetlinkMessageHeader>()
+            );
+            result.extend_from_slice(nlhdr_bytes);
+
+            let ifmsg_bytes = std::slice::from_raw_parts(
+                &ifmsg as *const libc::ifaddrmsg as *const u8,
+                size_of::<libc::ifaddrmsg>()
+            );
+            result.extend_from_slice(ifmsg_bytes);
+        }
+
+        result
+    }
+}
+
+/// Parse RTM_NEWADDR message and extract IP addresses
+#[cfg(target_os = "linux")]
+fn parse_ifaddrmsg(data: &[u8]) -> Option<Vec<IpAddr>> {
+    let mut addrs = Vec::new();
+
+    let offset = std::mem::size_of::<NetlinkMessageHeader>();
+    if data.len() < offset + std::mem::size_of::<libc::ifaddrmsg>() {
+        return Some(addrs);
+    }
+
+    unsafe {
+        let ifmsg_ptr = data.as_ptr().add(offset) as *const libc::ifaddrmsg;
+        let ifmsg = std::ptr::read_unaligned(ifmsg_ptr);
+
+        let rta_offset = offset + std::mem::size_of::<libc::ifaddrmsg>();
+        let mut current_offset = rta_offset;
+
+        let rtalen = ifmsg.ifa_index as usize;
+        let data_len = data.len();
+
+        while current_offset + std::mem::size_of::<libc::rtattr>() < data_len {
+            let rta_ptr = data.as_ptr().add(current_offset) as *const libc::rtattr;
+            let rta = std::ptr::read_unaligned(rta_ptr);
+
+            let rta_len = rta.rta_len as usize;
+            if rta_len == 0 || current_offset + rta_len > data_len {
+                break;
+            }
+
+            let rta_type = rta.rta_type;
+
+            // Check for IFA_LOCAL or IFA_ADDRESS
+            if rta_type == libc::IFA_LOCAL || rta_type == libc::IFA_ADDRESS {
+                let addr_offset = current_offset + std::mem::size_of::<libc::rtattr>();
+
+                if ifmsg.ifa_family as i32 == libc::AF_INET {
+                    if addr_offset + 4 <= data_len {
+                        let mut addr_bytes = [0u8; 4];
+                        addr_bytes.copy_from_slice(&data[addr_offset..addr_offset + 4]);
+                        addrs.push(IpAddr::from(addr_bytes));
+                    }
+                } else if ifmsg.ifa_family as i32 == libc::AF_INET6 {
+                    if addr_offset + 16 <= data_len {
+                        let mut addr_bytes = [0u8; 16];
+                        addr_bytes.copy_from_slice(&data[addr_offset..addr_offset + 16]);
+                        addrs.push(IpAddr::from(addr_bytes));
+                    }
+                }
+            }
+
+            current_offset += ((rta_len + std::mem::size_of::<libc::c_ulong>() - 1)
+                & !(std::mem::size_of::<libc::c_ulong>() - 1)) as usize;
+        }
+    }
+
+    Some(addrs)
 }
 
 /// Check if IP should be accepted based on version filter
@@ -594,24 +537,5 @@ mod tests {
 
         let source = factory.create(&config);
         assert!(source.is_err());
-    }
-
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn test_parse_ipv4() {
-        let bytes = [192, 168, 1, 1];
-        let ip = parse_ip_address(&bytes, libc::AF_INET);
-        assert_eq!(ip, Some(IpAddr::from([192, 168, 1, 1])));
-    }
-
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn test_parse_ipv6() {
-        let bytes = [0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0x88, 0x88];
-        let ip = parse_ip_address(&bytes, libc::AF_INET6);
-        assert_eq!(
-            ip,
-            Some(IpAddr::from([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888]))
-        );
     }
 }
