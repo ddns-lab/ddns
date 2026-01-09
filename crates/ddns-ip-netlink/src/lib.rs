@@ -29,14 +29,11 @@
 // This crate only compiles on Linux due to Netlink being a Linux-specific feature.
 
 use ddns_core::config::IpSourceConfig;
-use ddns_core::traits::{IpSource, IpSourceFactory};
+use ddns_core::traits::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion as TraitsIpVersion};
 use ddns_core::{Error, Result};
 
 #[cfg(target_os = "linux")]
-use ddns_core::config::IpVersion;
-
-#[cfg(target_os = "linux")]
-use ddns_core::traits::IpChangeEvent;
+use ddns_core::config::IpVersion as ConfigIpVersion;
 
 #[cfg(target_os = "linux")]
 use std::net::IpAddr;
@@ -54,7 +51,7 @@ pub struct NetlinkIpSource {
     interface: Option<String>,
 
     /// IP version to monitor
-    version: Option<IpVersion>,
+    version: Option<ConfigIpVersion>,
 
     /// Current IP address (cached)
     current_ip: Option<IpAddr>,
@@ -68,7 +65,7 @@ impl NetlinkIpSource {
     ///
     /// - `interface`: Optional interface name (e.g., "eth0")
     /// - `version`: IP version to monitor (None = both)
-    pub fn new(interface: Option<String>, version: Option<IpVersion>) -> Self {
+    pub fn new(interface: Option<String>, version: Option<ConfigIpVersion>) -> Self {
         Self {
             interface,
             version,
@@ -97,8 +94,9 @@ impl NetlinkIpSource {
                 // Filter by IP version if specified
                 if let Some(version) = self.version {
                     match version {
-                        IpVersion::V4 => ip.is_ipv4(),
-                        IpVersion::V6 => ip.is_ipv6(),
+                        ConfigIpVersion::V4 => ip.is_ipv4(),
+                        ConfigIpVersion::V6 => ip.is_ipv6(),
+                        ConfigIpVersion::Both => true, // Accept both v4 and v6
                     }
                 } else {
                     true
@@ -164,8 +162,15 @@ impl IpSource for NetlinkIpSource {
         Box::pin(UnboundedReceiverStream::new(rx))
     }
 
-    fn version(&self) -> Option<IpVersion> {
-        self.version
+    fn version(&self) -> Option<TraitsIpVersion> {
+        // Convert config::IpVersion to traits::IpVersion
+        // traits::IpVersion only has V4/V6, not Both
+        match self.version {
+            Some(ConfigIpVersion::V4) => Some(TraitsIpVersion::V4),
+            Some(ConfigIpVersion::V6) => Some(TraitsIpVersion::V6),
+            Some(ConfigIpVersion::Both) => None, // Both means dual-stack, return None
+            None => None,
+        }
     }
 }
 
@@ -221,7 +226,7 @@ mod tests {
 
         let config = IpSourceConfig::Netlink {
             interface: Some("eth0".to_string()),
-            version: Some(IpVersion::V4),
+            version: Some(ConfigIpVersion::V4),
         };
 
         let source = factory.create(&config);
@@ -231,7 +236,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn test_select_best_address() {
-        let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(IpVersion::V4));
+        let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(ConfigIpVersion::V4));
 
         let addresses = vec![
             IpAddr::from([127, 0, 0, 1]),   // loopback
@@ -246,7 +251,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn test_select_best_address_ipv6() {
-        let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(IpVersion::V6));
+        let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(ConfigIpVersion::V6));
 
         let addresses = vec![
             IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]),      // loopback
