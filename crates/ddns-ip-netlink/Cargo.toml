@@ -20,5 +20,7 @@ anyhow = { workspace = true }
 
 # Netlink library (Linux only)
 [target.'cfg(target_os = "linux")'.dependencies]
-neli = "0.7"
+netlink-sys = { version = "0.8", features = ["tokio"] }
+netlink-packet-core = "0.7"
+netlink-packet-route = "0.17"
 libc = "0.2"
