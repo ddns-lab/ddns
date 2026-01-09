@@ -323,40 +323,44 @@ impl DdnsEngine {
         new_ip: std::net::IpAddr,
     ) -> Result<()> {
         // Check if update is needed (idempotency)
-        if let Some(last_ip) = self.state_store.get_last_ip(record_name).await?
-            && last_ip == new_ip
-        {
-            debug!(
-                "Record {} already has IP {}, skipping update",
-                record_name, new_ip
-            );
-            self.emit_event(EngineEvent::UpdateSkipped {
-                record_name: record_name.to_string(),
-                current_ip: new_ip,
-            });
-            return Ok(());
-        }
-
-        // Rate limiting: Check minimum interval between updates
-        if self.min_update_interval_secs > 0
-            && let Some(record) = self.state_store.get_record(record_name).await?
-        {
-            let now = chrono::Utc::now();
-            let elapsed = now.signed_duration_since(record.last_updated);
-            let min_interval = chrono::Duration::seconds(self.min_update_interval_secs as i64);
-
-            if elapsed < min_interval {
+        // Note: Using nested if statements instead of let-chains for better Docker compatibility
+        #[allow(clippy::collapsible_if)]
+        if let Some(last_ip) = self.state_store.get_last_ip(record_name).await? {
+            if last_ip == new_ip {
                 debug!(
-                    "Record {} updated too recently ({}s ago), skipping update. Minimum interval: {}s",
-                    record_name,
-                    elapsed.num_seconds(),
-                    self.min_update_interval_secs
+                    "Record {} already has IP {}, skipping update",
+                    record_name, new_ip
                 );
                 self.emit_event(EngineEvent::UpdateSkipped {
                     record_name: record_name.to_string(),
                     current_ip: new_ip,
                 });
                 return Ok(());
+            }
+        }
+
+        // Rate limiting: Check minimum interval between updates
+        // Note: Using nested if statements instead of let-chains for better Docker compatibility
+        #[allow(clippy::collapsible_if)]
+        if self.min_update_interval_secs > 0 {
+            if let Some(record) = self.state_store.get_record(record_name).await? {
+                let now = chrono::Utc::now();
+                let elapsed = now.signed_duration_since(record.last_updated);
+                let min_interval = chrono::Duration::seconds(self.min_update_interval_secs as i64);
+
+                if elapsed < min_interval {
+                    debug!(
+                        "Record {} updated too recently ({}s ago), skipping update. Minimum interval: {}s",
+                        record_name,
+                        elapsed.num_seconds(),
+                        self.min_update_interval_secs
+                    );
+                    self.emit_event(EngineEvent::UpdateSkipped {
+                        record_name: record_name.to_string(),
+                        current_ip: new_ip,
+                    });
+                    return Ok(());
+                }
             }
         }
 

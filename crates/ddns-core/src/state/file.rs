@@ -109,17 +109,18 @@ impl FileStateStore {
         let path = path.as_ref().to_path_buf();
 
         // Create parent directory if it doesn't exist
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                Error::config(format!(
-                    "Failed to create state directory {}: {}",
-                    parent.display(),
-                    e
-                ))
-            })?;
+        // Note: Using nested if statements instead of let-chains for better Docker compatibility
+        #[allow(clippy::collapsible_if)]
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                fs::create_dir_all(parent).await.map_err(|e| {
+                    Error::config(format!(
+                        "Failed to create state directory {}: {}",
+                        parent.display(),
+                        e
+                    ))
+                })?;
+            }
         }
 
         // Try to load existing state
