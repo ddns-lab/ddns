@@ -3,6 +3,8 @@
 //! This module provides minimal test doubles that verify architectural
 //! constraints without implementing real functionality.
 
+#![allow(dead_code, unused_variables)]
+
 use ddns_core::error::Result;
 use ddns_core::traits::{
     DnsProvider, IpChangeEvent, IpSource, RecordMetadata, StateStore, UpdateResult,
@@ -12,7 +14,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::mpsc;
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
 
 /// A controlled IpSource that can emit events on demand
 pub struct ControlledIpSource {

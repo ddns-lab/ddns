@@ -109,16 +109,17 @@ impl FileStateStore {
         let path = path.as_ref().to_path_buf();
 
         // Create parent directory if it doesn't exist
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() && !parent.exists() {
-                fs::create_dir_all(parent).await.map_err(|e| {
-                    Error::config(&format!(
-                        "Failed to create state directory {}: {}",
-                        parent.display(),
-                        e
-                    ))
-                })?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent).await.map_err(|e| {
+                Error::config(format!(
+                    "Failed to create state directory {}: {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
         }
 
         // Try to load existing state
@@ -144,7 +145,7 @@ impl FileStateStore {
         match Self::load_state(path).await {
             Ok(records) => {
                 tracing::debug!("Loaded state from file: {} records", records.len());
-                return Ok(records);
+                Ok(records)
             }
             Err(e) => {
                 // Check if it's a JSON parse error (corruption)
@@ -196,7 +197,7 @@ impl FileStateStore {
                     }
                 }
                 // Other error (not corruption)
-                return Err(e);
+                Err(e)
             }
         }
     }
@@ -209,7 +210,7 @@ impl FileStateStore {
         }
 
         let content = fs::read_to_string(path).await.map_err(|e| {
-            Error::state_store(&format!(
+            Error::state_store(format!(
                 "Failed to read state file {}: {}",
                 path.display(),
                 e
@@ -218,7 +219,7 @@ impl FileStateStore {
 
         // Parse JSON
         let state_file: StateFileFormat = serde_json::from_str(&content).map_err(|e| {
-            Error::state_store(&format!(
+            Error::state_store(format!(
                 "Failed to parse state file {}: {}. \
                 File may be corrupted. Try restoring from backup.",
                 path.display(),
@@ -251,13 +252,13 @@ impl FileStateStore {
         };
 
         let json = serde_json::to_string_pretty(&state_file)
-            .map_err(|e| Error::state_store(&format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| Error::state_store(format!("Failed to serialize state: {}", e)))?;
 
         // Write to temporary file first
         let temp_path = self.temp_path();
         {
             let mut file = fs::File::create(&temp_path).await.map_err(|e| {
-                Error::state_store(&format!(
+                Error::state_store(format!(
                     "Failed to create temp file {}: {}",
                     temp_path.display(),
                     e
@@ -265,7 +266,7 @@ impl FileStateStore {
             })?;
 
             file.write_all(json.as_bytes()).await.map_err(|e| {
-                Error::state_store(&format!(
+                Error::state_store(format!(
                     "Failed to write to temp file {}: {}",
                     temp_path.display(),
                     e
@@ -273,7 +274,7 @@ impl FileStateStore {
             })?;
 
             file.flush().await.map_err(|e| {
-                Error::state_store(&format!(
+                Error::state_store(format!(
                     "Failed to flush temp file {}: {}",
                     temp_path.display(),
                     e
@@ -291,7 +292,7 @@ impl FileStateStore {
 
         // Atomic rename (temp -> actual)
         fs::rename(&temp_path, &self.path).await.map_err(|e| {
-            Error::state_store(&format!(
+            Error::state_store(format!(
                 "Failed to rename {} to {}: {}",
                 temp_path.display(),
                 self.path.display(),
@@ -313,7 +314,7 @@ impl FileStateStore {
     /// Restore state file from backup
     async fn restore_from_backup(path: &Path, backup_path: &Path) -> Result<(), Error> {
         fs::copy(backup_path, path).await.map_err(|e| {
-            Error::state_store(&format!(
+            Error::state_store(format!(
                 "Failed to restore from backup {} to {}: {}",
                 backup_path.display(),
                 path.display(),
@@ -463,12 +464,14 @@ mod tests {
         fs::write(&path, b"corrupted json data").await.unwrap();
 
         // Load should recover from backup (should not error)
-        let store2 = FileStateStore::new(&path).await.expect(&format!(
-            "Failed to create store from corrupted file. Backup should have been recovered.\n\
+        let store2 = FileStateStore::new(&path).await.unwrap_or_else(|_| {
+            panic!(
+                "Failed to create store from corrupted file. Backup should have been recovered.\n\
              Main file: {:?}\n\
              Backup file: {:?}",
-            path, backup_path
-        ));
+                path, backup_path
+            )
+        });
         let recovered = store2.get_last_ip("example.com").await.unwrap();
         // Should have recovered the PREVIOUS value (from backup, before last write)
         assert_eq!(

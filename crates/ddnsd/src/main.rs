@@ -88,6 +88,7 @@ impl From<DdnsExitCode> for ExitCode {
 }
 
 /// Application configuration
+#[allow(dead_code)]
 struct Config {
     ip_source_type: String,
     ip_source_interface: Option<String>,
@@ -232,15 +233,16 @@ impl Config {
                 }
 
                 // Check parent directory exists or can be created
-                if let Some(parent) = std::path::Path::new(path).parent() {
-                    if !parent.as_os_str().is_empty() && !parent.exists() {
-                        anyhow::bail!(
-                            "DDNS_STATE_STORE_PATH parent directory does not exist: {}. \
+                if let Some(parent) = std::path::Path::new(path).parent()
+                    && !parent.as_os_str().is_empty()
+                    && !parent.exists()
+                {
+                    anyhow::bail!(
+                        "DDNS_STATE_STORE_PATH parent directory does not exist: {}. \
                             Create it first: sudo mkdir -p {}",
-                            parent.display(),
-                            parent.display()
-                        );
-                    }
+                        parent.display(),
+                        parent.display()
+                    );
                 }
             } else {
                 anyhow::bail!(
@@ -252,7 +254,7 @@ impl Config {
 
         // Validate IP source URL for HTTP source
         if self.ip_source_type == "http" {
-            if self.ip_source_url.as_ref().map_or(true, |u| u.is_empty()) {
+            if self.ip_source_url.as_ref().is_none_or(|u| u.is_empty()) {
                 anyhow::bail!("DDNS_IP_SOURCE_URL is required when DDNS_IP_SOURCE_TYPE=http");
             }
 
@@ -276,31 +278,31 @@ impl Config {
         }
 
         // Validate numeric ranges
-        if let Some(interval) = self.ip_source_interval {
-            if interval < 10 || interval > 3600 {
-                anyhow::bail!(
-                    "DDNS_IP_SOURCE_INTERVAL must be between 10 and 3600 seconds. Got: {}",
-                    interval
-                );
-            }
+        if let Some(interval) = self.ip_source_interval
+            && (!(10..=3600).contains(&interval))
+        {
+            anyhow::bail!(
+                "DDNS_IP_SOURCE_INTERVAL must be between 10 and 3600 seconds. Got: {}",
+                interval
+            );
         }
 
-        if let Some(max_retries) = self.max_retries {
-            if max_retries == 0 || max_retries > 10 {
-                anyhow::bail!(
-                    "DDNS_MAX_RETRIES must be between 1 and 10. Got: {}",
-                    max_retries
-                );
-            }
+        if let Some(max_retries) = self.max_retries
+            && (max_retries == 0 || max_retries > 10)
+        {
+            anyhow::bail!(
+                "DDNS_MAX_RETRIES must be between 1 and 10. Got: {}",
+                max_retries
+            );
         }
 
-        if let Some(retry_delay) = self.retry_delay_secs {
-            if retry_delay < 1 || retry_delay > 300 {
-                anyhow::bail!(
-                    "DDNS_RETRY_DELAY_SECS must be between 1 and 300 seconds. Got: {}",
-                    retry_delay
-                );
-            }
+        if let Some(retry_delay) = self.retry_delay_secs
+            && (!(1..=300).contains(&retry_delay))
+        {
+            anyhow::bail!(
+                "DDNS_RETRY_DELAY_SECS must be between 1 and 300 seconds. Got: {}",
+                retry_delay
+            );
         }
 
         // Validate log level
@@ -433,7 +435,7 @@ fn main() -> ExitCode {
 /// Run the daemon
 async fn run_daemon(config: Config) -> Result<()> {
     // Create provider registry
-    let registry = ddns_core::ProviderRegistry::new();
+    let _registry = ddns_core::ProviderRegistry::new();
 
     // Register built-in providers
     // Note: Provider crates should provide a `register()` function

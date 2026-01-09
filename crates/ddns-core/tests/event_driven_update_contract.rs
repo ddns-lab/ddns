@@ -30,7 +30,7 @@ async fn one_ip_change_triggers_exactly_one_dns_update() {
 
     // Create provider that tracks calls
     let provider = Box::new(MockDnsProvider::new("test"));
-    let update_count = provider.update_call_count();
+    let _update_count = provider.update_call_count();
     let provider_arc = std::sync::Arc::new(provider);
 
     // Create state store

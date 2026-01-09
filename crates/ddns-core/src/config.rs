@@ -206,7 +206,7 @@ impl Default for ProviderConfig {
 }
 
 /// State store configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StateStoreConfig {
     /// File-based state store
@@ -216,6 +216,7 @@ pub enum StateStoreConfig {
     },
 
     /// In-memory state store (not persistent)
+    #[default]
     Memory,
 
     /// Custom state store
@@ -225,12 +226,6 @@ pub enum StateStoreConfig {
         /// Custom configuration data
         config: serde_json::Value,
     },
-}
-
-impl Default for StateStoreConfig {
-    fn default() -> Self {
-        StateStoreConfig::Memory
-    }
 }
 
 /// DNS record configuration

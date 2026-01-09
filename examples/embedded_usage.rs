@@ -3,11 +3,12 @@
 //! This example demonstrates using ddns-core as a library in a custom application.
 //! The engine lifecycle is fully managed by the application.
 
-use async_trait::async_trait;
+#![allow(dead_code)]
+
 use ddns_core::config::RecordConfig;
 use ddns_core::{
     traits::{DnsProvider, IpChangeEvent, IpSource, StateStore},
-    DdnsConfig, DdnsEngine, Error, Result,
+    DdnsConfig, DdnsEngine, Result,
 };
 use std::net::IpAddr;
 use std::pin::Pin;

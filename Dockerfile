@@ -57,8 +57,7 @@ RUN mkdir -p /var/lib/ddns && \
 COPY --from=builder /build/target/release/ddnsd /usr/local/bin/ddnsd
 
 # Set permissions
-RUN chmod 755 /usr/local/bin/ddnsd && \
-    chmod 644 /usr/local/bin/ddnsd
+RUN chmod 755 /usr/local/bin/ddnsd
 
 # Switch to non-root user
 USER ddns
