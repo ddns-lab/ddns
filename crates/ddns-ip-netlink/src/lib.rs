@@ -32,6 +32,12 @@ use ddns_core::config::IpSourceConfig;
 use ddns_core::traits::{IpSource, IpSourceFactory};
 use ddns_core::{Error, Result};
 
+#[cfg(target_os = "linux")]
+use ddns_core::traits::IpVersion;
+
+#[cfg(target_os = "linux")]
+use std::net::IpAddr;
+
 /// Netlink-based IP source for Linux
 #[cfg(target_os = "linux")]
 pub struct NetlinkIpSource {
