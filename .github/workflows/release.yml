@@ -9,41 +9,151 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: ddnsd
+            asset_name: ddnsd-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: ddnsd
+            asset_name: ddnsd-linux-arm64
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          target: ${{ matrix.target }}
 
-      - name: Build release binaries
+      - name: Install cross-compilation tools (ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          cargo build --release --bin ddnsd
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: |
+          cargo build --release --bin ddnsd --target ${{ matrix.target }}
 
       - name: Create tarball
+        shell: bash
         run: |
-          cd target/release
-          tar czf ddnsd-linux-x86_64.tar.gz ddnsd
-          cd ../..
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
+          cd ../../..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}.tar.gz
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
 
       - name: Generate checksums
         run: |
-          cd target/release
-          sha256sum ddnsd-linux-x86_64.tar.gz > checksums.txt
-          cd ../..
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            for file in *.tar.gz; do
+              sha256sum "$file" >> ../../checksums.txt
+            done
+            cd ..
+          done
+          cd ..
+          cat checksums.txt
+
+      - name: Create source tarball
+        run: |
+          git archive --format=tar.gz --prefix=ddns-${{ github.ref_name }}/ HEAD > ddns-${{ github.ref_name }}.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            target/release/ddnsd-linux-x86_64.tar.gz
-            target/release/checksums.txt
+            artifacts/ddnsd-linux-amd64/ddnsd-linux-amd64.tar.gz
+            artifacts/ddnsd-linux-arm64/ddnsd-linux-arm64.tar.gz
+            checksums.txt
+            ddns-${{ github.ref_name }}.tar.gz
           generate_release_notes: true
           draft: false
           prerelease: false
+          body: |
+            ## ddns ${{ github.ref_name }}
+
+            ### Binary Downloads
+
+            - **Linux AMD64**: `ddnsd-linux-amd64.tar.gz` - For x86_64 systems
+            - **Linux ARM64**: `ddnsd-linux-arm64.tar.gz` - for ARM64/aarch64 systems
+            - **Source**: `ddns-${{ github.ref_name }}.tar.gz` - Source code tarball
+
+            ### Installation
+
+            ```bash
+            # Download and extract
+            wget https://github.com/ddns-lab/ddns/releases/download/${{ github.ref_name }}/ddnsd-linux-amd64.tar.gz
+            tar xzf ddnsd-linux-amd64.tar.gz
+
+            # Install
+            sudo install -m 755 ddnsd /usr/local/bin/ddnsd
+
+            # Configure with environment variables
+            export DDNS_PROVIDER_TYPE=cloudflare
+            export DDNS_PROVIDER_API_TOKEN=your_token
+            export DDNS_RECORDS=example.com
+
+            # Run
+            ddnsd
+            ```
+
+            ### Verification
+
+            Verify the checksums:
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+
+            ### What's Included
+
+            - ✅ Production-ready Cloudflare DNS provider
+            - ✅ Event-driven architecture
+            - ✅ Dry-run mode for safe testing
+            - ✅ Comprehensive error handling
+            - ✅ Security-first design
+
+            See [README.md](https://github.com/ddns-lab/ddns/blob/main/README.md) for details.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
