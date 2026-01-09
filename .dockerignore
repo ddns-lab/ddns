@@ -24,7 +24,7 @@ target/
 # Testing
 tests/
 benches/
-examples/
+# Note: examples/ is needed for workspace build (Cargo.toml includes it)
 
 # Deployment (not needed in image context)
 deploy/

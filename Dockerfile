@@ -15,8 +15,8 @@
 # =============================================================================
 # Build Stage
 # =============================================================================
-# Use Rust 1.85+ for Edition 2024 support
-FROM rust:1.85-alpine AS builder
+# Use latest Rust for Edition 2024 support (1.85+)
+FROM rust:alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -28,9 +28,10 @@ RUN apk add --no-cache \
 
 WORKDIR /build
 
-# Copy manifests
+# Copy manifests and source
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY examples/ ./examples/
 
 # Build release binary
 RUN cargo build --release --bin ddnsd
