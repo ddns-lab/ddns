@@ -22,4 +22,4 @@ anyhow = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 neli = "0.7"
 futures = "0.3"
-libc = "0.6"
+libc = "0.2"
