@@ -3,14 +3,16 @@
 //! This module provides minimal test doubles that verify architectural
 //! constraints without implementing real functionality.
 
-use ddns_core::traits::{IpSource, DnsProvider, StateStore, IpChangeEvent, UpdateResult, RecordMetadata};
 use ddns_core::error::Result;
+use ddns_core::traits::{
+    DnsProvider, IpChangeEvent, IpSource, RecordMetadata, StateStore, UpdateResult,
+};
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use std::pin::Pin;
-use tokio_stream::{Stream, StreamExt};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::mpsc;
+use tokio_stream::{Stream, StreamExt};
 
 /// A controlled IpSource that can emit events on demand
 pub struct ControlledIpSource {
@@ -69,7 +71,11 @@ impl IpSource for ControlledIpSource {
         self.watch_call_count.fetch_add(1, Ordering::SeqCst);
 
         // Take the receiver (only called once)
-        let rx = self.engine_rx.lock().unwrap().take()
+        let rx = self
+            .engine_rx
+            .lock()
+            .unwrap()
+            .take()
             .expect("watch() can only be called once");
 
         let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
@@ -146,7 +152,10 @@ impl MockDnsProvider {
 impl DnsProvider for MockDnsProvider {
     async fn update_record(&self, record_name: &str, new_ip: IpAddr) -> Result<UpdateResult> {
         self.update_call_count.fetch_add(1, Ordering::SeqCst);
-        self.updated_records.lock().unwrap().push(record_name.to_string());
+        self.updated_records
+            .lock()
+            .unwrap()
+            .push(record_name.to_string());
 
         Ok(UpdateResult::Updated {
             previous_ip: None,
@@ -228,17 +237,27 @@ impl StateStore for MockStateStore {
         Ok(self.state.lock().unwrap().get(record_name).copied())
     }
 
-    async fn get_record(&self, _record_name: &str) -> Result<Option<ddns_core::traits::StateRecord>> {
+    async fn get_record(
+        &self,
+        _record_name: &str,
+    ) -> Result<Option<ddns_core::traits::StateRecord>> {
         Ok(None)
     }
 
     async fn set_last_ip(&self, record_name: &str, ip: IpAddr) -> Result<()> {
         self.set_call_count.fetch_add(1, Ordering::SeqCst);
-        self.state.lock().unwrap().insert(record_name.to_string(), ip);
+        self.state
+            .lock()
+            .unwrap()
+            .insert(record_name.to_string(), ip);
         Ok(())
     }
 
-    async fn set_record(&self, _record_name: &str, _record: &ddns_core::traits::StateRecord) -> Result<()> {
+    async fn set_record(
+        &self,
+        _record_name: &str,
+        _record: &ddns_core::traits::StateRecord,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -274,7 +293,7 @@ pub fn minimal_config(record_name: &str) -> ddns_core::config::DdnsConfig {
             max_retries: 3,
             retry_delay_secs: 1,
             startup_delay_secs: 0,
-            min_update_interval_secs: 0,  // Disabled for tests
+            min_update_interval_secs: 0, // Disabled for tests
             event_channel_capacity: 100,
             metadata: std::collections::HashMap::new(),
         },

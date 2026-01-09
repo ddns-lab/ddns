@@ -3,8 +3,8 @@
 // This module provides implementations of the StateStore trait for
 // different persistence strategies.
 
-pub mod memory;
 pub mod file;
+pub mod memory;
 
-pub use memory::MemoryStateStore;
 pub use file::FileStateStore;
+pub use memory::MemoryStateStore;

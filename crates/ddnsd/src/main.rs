@@ -55,15 +55,15 @@
 // ddnsd
 // ```
 
+use anyhow::Result;
 use std::env;
 use std::process::ExitCode;
 use std::time::Duration;
-use anyhow::Result;
-use tracing::{info, error, warn, Level};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 #[cfg(unix)]
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 
 /// Exit codes for different termination scenarios
 ///
@@ -134,8 +134,7 @@ impl Config {
             retry_delay_secs: env::var("DDNS_RETRY_DELAY_SECS")
                 .ok()
                 .map(|s| s.parse().unwrap_or(5)),
-            log_level: env::var("DDNS_LOG_LEVEL")
-                .unwrap_or_else(|_| "info".to_string()),
+            log_level: env::var("DDNS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
         })
     }
 
@@ -169,10 +168,11 @@ impl Config {
 
         // Check for obvious placeholder tokens (common mistake)
         let token_lower = self.provider_api_token.to_lowercase();
-        if token_lower.contains("your_token") ||
-           token_lower.contains("replace_me") ||
-           token_lower.contains("example") ||
-           token_lower == "token" {
+        if token_lower.contains("your_token")
+            || token_lower.contains("replace_me")
+            || token_lower.contains("example")
+            || token_lower == "token"
+        {
             anyhow::bail!(
                 "DDNS_PROVIDER_API_TOKEN appears to be a placeholder. \
                 Use an actual API token from your DNS provider."
@@ -181,7 +181,7 @@ impl Config {
 
         // Validate provider type
         match self.provider_type.as_str() {
-            "cloudflare" => {},  // Currently supported
+            "cloudflare" => {} // Currently supported
             _ => anyhow::bail!(
                 "DDNS_PROVIDER_TYPE '{}' is not supported. \
                 Supported providers: cloudflare",
@@ -191,7 +191,7 @@ impl Config {
 
         // Validate IP source type
         match self.ip_source_type.as_str() {
-            "netlink" | "http" | "file" => {},
+            "netlink" | "http" | "file" => {}
             _ => anyhow::bail!(
                 "DDNS_IP_SOURCE_TYPE '{}' is not supported. \
                 Supported types: netlink, http, file",
@@ -201,7 +201,7 @@ impl Config {
 
         // Validate state store type
         match self.state_store_type.as_str() {
-            "file" | "memory" => {},
+            "file" | "memory" => {}
             _ => anyhow::bail!(
                 "DDNS_STATE_STORE_TYPE '{}' is not supported. \
                 Supported types: file, memory",
@@ -253,9 +253,7 @@ impl Config {
         // Validate IP source URL for HTTP source
         if self.ip_source_type == "http" {
             if self.ip_source_url.as_ref().map_or(true, |u| u.is_empty()) {
-                anyhow::bail!(
-                    "DDNS_IP_SOURCE_URL is required when DDNS_IP_SOURCE_TYPE=http"
-                );
+                anyhow::bail!("DDNS_IP_SOURCE_URL is required when DDNS_IP_SOURCE_TYPE=http");
             }
 
             if let Some(ref url) = self.ip_source_url {
@@ -269,8 +267,10 @@ impl Config {
 
                 // Warn if using HTTP (not HTTPS)
                 if url.starts_with("http://") && !url.starts_with("https://") {
-                    eprintln!("WARNING: DDNS_IP_SOURCE_URL uses HTTP (not HTTPS). \
-                              This is less secure. Consider using HTTPS.");
+                    eprintln!(
+                        "WARNING: DDNS_IP_SOURCE_URL uses HTTP (not HTTPS). \
+                              This is less secure. Consider using HTTPS."
+                    );
                 }
             }
         }
@@ -305,7 +305,7 @@ impl Config {
 
         // Validate log level
         match self.log_level.to_lowercase().as_str() {
-            "trace" | "debug" | "info" | "warn" | "error" => {},
+            "trace" | "debug" | "info" | "warn" | "error" => {}
             _ => anyhow::bail!(
                 "DDNS_LOG_LEVEL '{}' is not valid. \
                 Valid levels: trace, debug, info, warn, error",
@@ -396,9 +396,7 @@ fn main() -> ExitCode {
         _ => Level::INFO,
     };
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(log_level)
-        .finish();
+    let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
 
     if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
         eprintln!("Failed to set tracing subscriber: {}", e);
@@ -524,9 +522,14 @@ async fn wait_for_shutdown_with_timeout(timeout_duration: Duration) -> Result<&'
             _ = sigterm.recv() => "SIGTERM",
             _ = sigint.recv() => "SIGINT",
         }
-    }).await {
+    })
+    .await
+    {
         Ok(signal) => Ok(signal),
-        Err(_) => Err(anyhow::anyhow!("Shutdown timeout after {:?}", timeout_duration)),
+        Err(_) => Err(anyhow::anyhow!(
+            "Shutdown timeout after {:?}",
+            timeout_duration
+        )),
     }
 }
 
@@ -540,6 +543,9 @@ async fn wait_for_shutdown_with_timeout(timeout_duration: Duration) -> Result<&'
     match timeout(timeout_duration, tokio::signal::ctrl_c()).await {
         Ok(Ok(())) => Ok("SIGINT"),
         Ok(Err(e)) => Err(anyhow::anyhow!("Failed to wait for CTRL-C: {}", e)),
-        Err(_) => Err(anyhow::anyhow!("Shutdown timeout after {:?}", timeout_duration)),
+        Err(_) => Err(anyhow::anyhow!(
+            "Shutdown timeout after {:?}",
+            timeout_duration
+        )),
     }
 }

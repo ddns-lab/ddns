@@ -40,8 +40,8 @@
 // - `DDNS_RECORD_TYPE`: Record type (A or AAAA, default: A)
 // - `DDNS_MODE`: "dry-run" or "live" (default: dry-run)
 
-use ddns_provider_cloudflare::CloudflareProvider;
 use ddns_core::traits::DnsProvider;
+use ddns_provider_cloudflare::CloudflareProvider;
 use std::env;
 use std::net::IpAddr;
 
@@ -117,9 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create provider
     tracing::info!("\n--- Step 1: Creating Cloudflare Provider ---");
     let provider = CloudflareProvider::new(
-        api_token,
-        zone_id,
-        None, // account_id
+        api_token, zone_id, None, // account_id
         dry_run,
     );
 
@@ -143,7 +141,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(result) => {
             tracing::info!("✓ Update record succeeded");
             match result {
-                ddns_core::traits::UpdateResult::Updated { previous_ip, new_ip } => {
+                ddns_core::traits::UpdateResult::Updated {
+                    previous_ip,
+                    new_ip,
+                } => {
                     tracing::info!("  Result: Updated");
                     if let Some(prev) = previous_ip {
                         tracing::info!("  Previous IP: {}", prev);
@@ -172,16 +173,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Calling update_record() again with same IP...");
 
     match provider.update_record(&record_name, test_ip).await {
-        Ok(result) => {
-            match result {
-                ddns_core::traits::UpdateResult::Unchanged { .. } => {
-                    tracing::info!("✓ Idempotency verified (unchanged as expected)");
-                }
-                _ => {
-                    tracing::warn!("⚠ Update performed again (may indicate idempotency issue)");
-                }
+        Ok(result) => match result {
+            ddns_core::traits::UpdateResult::Unchanged { .. } => {
+                tracing::info!("✓ Idempotency verified (unchanged as expected)");
             }
-        }
+            _ => {
+                tracing::warn!("⚠ Update performed again (may indicate idempotency issue)");
+            }
+        },
         Err(e) => {
             tracing::error!("✗ Idempotency test failed: {}", e);
             std::process::exit(1);

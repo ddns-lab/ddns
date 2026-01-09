@@ -14,9 +14,9 @@
 
 mod common;
 
+use common::*;
 use ddns_core::DdnsEngine;
 use ddns_core::traits::IpSource;
-use common::*;
 use tokio_stream::StreamExt;
 
 #[tokio::test]
@@ -39,9 +39,8 @@ async fn idle_no_dns_updates_without_ip_events() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     // Run engine in background
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Wait a brief moment to ensure the engine is running
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -67,8 +66,8 @@ async fn idle_no_background_polling() {
     // 3. Verifying no watch() calls beyond initial setup
     // 4. Verifying no current() calls beyond initial setup
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     // Create a tracking wrapper
     let current_calls = Arc::new(AtomicUsize::new(0));
@@ -87,7 +86,11 @@ async fn idle_no_background_polling() {
             Ok(self.current_ip)
         }
 
-        fn watch(&self) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = ddns_core::traits::IpChangeEvent> + Send + 'static>> {
+        fn watch(
+            &self,
+        ) -> std::pin::Pin<
+            Box<dyn tokio_stream::Stream<Item = ddns_core::traits::IpChangeEvent> + Send + 'static>,
+        > {
             self.watch_calls.fetch_add(1, Ordering::SeqCst);
             let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
             Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
@@ -110,9 +113,8 @@ async fn idle_no_background_polling() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     // Run engine
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Let it run briefly
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -142,8 +144,8 @@ async fn idle_no_periodic_wakeups() {
     // This test ensures that the engine doesn't have periodic wakeups
     // that would consume CPU unnecessarily
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
 
     // Create an IP source that counts how many times it's polled
@@ -160,7 +162,11 @@ async fn idle_no_periodic_wakeups() {
             Ok(self.current_ip)
         }
 
-        fn watch(&self) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = ddns_core::traits::IpChangeEvent> + Send + 'static>> {
+        fn watch(
+            &self,
+        ) -> std::pin::Pin<
+            Box<dyn tokio_stream::Stream<Item = ddns_core::traits::IpChangeEvent> + Send + 'static>,
+        > {
             self.poll_count.fetch_add(1, Ordering::SeqCst);
 
             // Create a stream that never yields
@@ -168,8 +174,8 @@ async fn idle_no_periodic_wakeups() {
 
             // Wrap in a stream that increments counter on each poll
             let poll_count = self.poll_count.clone();
-            let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
-                .map(move |event| {
+            let stream =
+                tokio_stream::wrappers::UnboundedReceiverStream::new(rx).map(move |event| {
                     poll_count.fetch_add(1, Ordering::SeqCst);
                     event
                 });
@@ -195,9 +201,8 @@ async fn idle_no_periodic_wakeups() {
     let start = Instant::now();
 
     // Run engine
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Let it run for 200ms
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;

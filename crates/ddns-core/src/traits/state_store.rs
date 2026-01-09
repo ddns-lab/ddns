@@ -37,8 +37,8 @@
 // ```
 
 use async_trait::async_trait;
-use std::net::IpAddr;
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 /// State record for a DNS entry
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -169,7 +169,8 @@ pub trait StateStore: Send + Sync {
     ///
     /// - `Ok(())`: Successfully updated
     /// - `Err(Error)`: Storage error
-    async fn set_record(&self, record_name: &str, record: &StateRecord) -> Result<(), crate::Error>;
+    async fn set_record(&self, record_name: &str, record: &StateRecord)
+    -> Result<(), crate::Error>;
 
     /// Delete a state record
     ///
@@ -214,8 +215,5 @@ pub trait StateStoreFactory: Send + Sync {
     /// # Returns
     ///
     /// A boxed StateStore trait object
-    fn create(
-        &self,
-        config: &serde_json::Value,
-    ) -> Result<Box<dyn StateStore>, crate::Error>;
+    fn create(&self, config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error>;
 }

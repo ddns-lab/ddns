@@ -16,10 +16,10 @@
 
 mod common;
 
-use ddns_core::traits::{IpSource, DnsProvider, IpChangeEvent};
-use ddns_core::DdnsEngine;
-use std::net::IpAddr;
 use common::*;
+use ddns_core::DdnsEngine;
+use ddns_core::traits::{DnsProvider, IpChangeEvent, IpSource};
+use std::net::IpAddr;
 
 #[tokio::test]
 async fn shutdown_signal_terminates_engine() {
@@ -37,9 +37,8 @@ async fn shutdown_signal_terminates_engine() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     // Start engine
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Wait for startup
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -49,15 +48,9 @@ async fn shutdown_signal_terminates_engine() {
     assert!(shutdown_result.is_ok(), "shutdown signal send succeeds");
 
     // Wait for engine to stop
-    let result = tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        engine_handle
-    ).await;
+    let result = tokio::time::timeout(tokio::time::Duration::from_secs(5), engine_handle).await;
 
-    assert!(
-        result.is_ok(),
-        "Engine should terminate within 5 seconds"
-    );
+    assert!(result.is_ok(), "Engine should terminate within 5 seconds");
 
     let engine_result = result.unwrap().unwrap();
     assert!(
@@ -91,9 +84,8 @@ async fn shutdown_flushes_state() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -103,8 +95,7 @@ async fn shutdown_flushes_state() {
     // Assert: flush was called exactly once
     let flush_count = state_store_arc.flush_call_count();
     assert_eq!(
-        flush_count,
-        1,
+        flush_count, 1,
         "StateStore::flush() should be called exactly once on shutdown, got {}",
         flush_count
     );
@@ -124,8 +115,13 @@ async fn shutdown_during_ip_update() {
 
     #[async_trait::async_trait]
     impl DnsProvider for SlowProvider {
-        async fn update_record(&self, _record_name: &str, _new_ip: IpAddr) -> ddns_core::Result<ddns_core::traits::UpdateResult> {
-            self.update_call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        async fn update_record(
+            &self,
+            _record_name: &str,
+            _new_ip: IpAddr,
+        ) -> ddns_core::Result<ddns_core::traits::UpdateResult> {
+            self.update_call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
             // Simulate slow update
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -136,7 +132,10 @@ async fn shutdown_during_ip_update() {
             })
         }
 
-        async fn get_record(&self, _record_name: &str) -> ddns_core::Result<ddns_core::traits::RecordMetadata> {
+        async fn get_record(
+            &self,
+            _record_name: &str,
+        ) -> ddns_core::Result<ddns_core::traits::RecordMetadata> {
             Ok(ddns_core::traits::RecordMetadata {
                 id: "test".to_string(),
                 name: _record_name.to_string(),
@@ -162,19 +161,13 @@ async fn shutdown_during_ip_update() {
     let state_store = Box::new(MockStateStore::new());
     let config = minimal_config("example.com");
 
-    let (engine, _event_rx) = DdnsEngine::new(
-        Box::new(ip_source),
-        provider,
-        state_store,
-        config,
-    )
-    .expect("engine construction succeeds");
+    let (engine, _event_rx) = DdnsEngine::new(Box::new(ip_source), provider, state_store, config)
+        .expect("engine construction succeeds");
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -189,10 +182,7 @@ async fn shutdown_during_ip_update() {
     shutdown_tx.send(()).unwrap();
 
     // Engine should still terminate (may wait for update or cancel it)
-    let result = tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        engine_handle
-    ).await;
+    let result = tokio::time::timeout(tokio::time::Duration::from_secs(5), engine_handle).await;
 
     assert!(
         result.is_ok(),
@@ -209,8 +199,8 @@ async fn no_future_leaks_after_shutdown() {
     // 2. Shutting it down
     // 3. Verifying no tokio tasks remain
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     // Track how many stream tasks exist
     let stream_task_count = Arc::new(AtomicUsize::new(0));
@@ -233,7 +223,10 @@ async fn no_future_leaks_after_shutdown() {
             Ok(self.current_ip)
         }
 
-        fn watch(&self) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>> {
+        fn watch(
+            &self,
+        ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>>
+        {
             self.stream_task_count.fetch_add(1, Ordering::SeqCst);
 
             let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -255,9 +248,8 @@ async fn no_future_leaks_after_shutdown() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -269,8 +261,7 @@ async fn no_future_leaks_after_shutdown() {
 
     let count = stream_task_count.load(Ordering::SeqCst);
     assert_eq!(
-        count,
-        0,
+        count, 0,
         "All stream tasks should be cleaned up after shutdown, count: {}",
         count
     );
@@ -291,9 +282,8 @@ async fn multiple_shutdown_calls_are_safe() {
     let (shutdown_tx1, shutdown_rx1) = tokio::sync::oneshot::channel();
     let (shutdown_tx2, _shutdown_rx2) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx1)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx1)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -304,10 +294,10 @@ async fn multiple_shutdown_calls_are_safe() {
     let _ = shutdown_tx2.send(());
 
     // Engine should still terminate successfully
-    let result = tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        engine_handle
-    ).await;
+    let result = tokio::time::timeout(tokio::time::Duration::from_secs(5), engine_handle).await;
 
-    assert!(result.is_ok(), "Multiple shutdown signals should not cause issues");
+    assert!(
+        result.is_ok(),
+        "Multiple shutdown signals should not cause issues"
+    );
 }

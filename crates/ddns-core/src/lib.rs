@@ -27,17 +27,17 @@
 // 4. **Library-First**: All core functionality can be used as a library
 // 5. **Idempotency**: State management ensures safe, repeatable operations
 
-pub mod traits;
-pub mod engine;
-pub mod registry;
 pub mod config;
+pub mod engine;
 pub mod error;
+pub mod registry;
 pub mod state;
+pub mod traits;
 
 // Re-export core types for convenience
-pub use traits::{IpSource, DnsProvider, StateStore};
-pub use engine::DdnsEngine;
-pub use registry::ProviderRegistry;
 pub use config::{DdnsConfig, IpSourceConfig, ProviderConfig};
+pub use engine::DdnsEngine;
 pub use error::{Error, Result};
-pub use state::{MemoryStateStore, FileStateStore};
+pub use registry::ProviderRegistry;
+pub use state::{FileStateStore, MemoryStateStore};
+pub use traits::{DnsProvider, IpSource, StateStore};

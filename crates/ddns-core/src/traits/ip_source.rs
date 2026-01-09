@@ -31,9 +31,9 @@
 // ```
 
 use async_trait::async_trait;
-use tokio_stream::Stream;
 use std::net::IpAddr;
 use std::pin::Pin;
+use tokio_stream::Stream;
 
 /// Represents a detected IP address change event
 #[derive(Debug, Clone, PartialEq, Eq)]

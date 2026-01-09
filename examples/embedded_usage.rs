@@ -3,16 +3,15 @@
 //! This example demonstrates using ddns-core as a library in a custom application.
 //! The engine lifecycle is fully managed by the application.
 
-use ddns_core::{
-    DdnsEngine, DdnsConfig,
-    traits::{IpSource, DnsProvider, StateStore, IpChangeEvent},
-    Error, Result,
-};
+use async_trait::async_trait;
 use ddns_core::config::RecordConfig;
+use ddns_core::{
+    traits::{DnsProvider, IpChangeEvent, IpSource, StateStore},
+    DdnsConfig, DdnsEngine, Error, Result,
+};
 use std::net::IpAddr;
 use std::pin::Pin;
 use tokio_stream::Stream;
-use async_trait::async_trait;
 
 /// Custom IP source for embedded usage
 struct EmbeddedIpSource {
@@ -79,7 +78,8 @@ impl DnsProvider for EmbeddedProvider {
         record_name: &str,
         new_ip: IpAddr,
     ) -> Result<ddns_core::traits::UpdateResult> {
-        self.update_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.update_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         println!("[Embedded] Updating {} -> {}", record_name, new_ip);
 
         // Simulate successful update
@@ -89,10 +89,7 @@ impl DnsProvider for EmbeddedProvider {
         })
     }
 
-    async fn get_record(
-        &self,
-        record_name: &str,
-    ) -> Result<ddns_core::traits::RecordMetadata> {
+    async fn get_record(&self, record_name: &str) -> Result<ddns_core::traits::RecordMetadata> {
         Ok(ddns_core::traits::RecordMetadata {
             id: "embedded-id".to_string(),
             name: record_name.to_string(),
@@ -130,16 +127,26 @@ impl StateStore for EmbeddedStateStore {
         Ok(self.state.lock().unwrap().get(record_name).copied())
     }
 
-    async fn get_record(&self, _record_name: &str) -> Result<Option<ddns_core::traits::StateRecord>> {
+    async fn get_record(
+        &self,
+        _record_name: &str,
+    ) -> Result<Option<ddns_core::traits::StateRecord>> {
         Ok(None)
     }
 
     async fn set_last_ip(&self, record_name: &str, ip: IpAddr) -> Result<()> {
-        self.state.lock().unwrap().insert(record_name.to_string(), ip);
+        self.state
+            .lock()
+            .unwrap()
+            .insert(record_name.to_string(), ip);
         Ok(())
     }
 
-    async fn set_record(&self, _record_name: &str, _record: &ddns_core::traits::StateRecord) -> Result<()> {
+    async fn set_record(
+        &self,
+        _record_name: &str,
+        _record: &ddns_core::traits::StateRecord,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -181,23 +188,19 @@ async fn main() -> Result<()> {
         state_store: ddns_core::config::StateStoreConfig::Memory,
         records: vec![RecordConfig::new("example.com")],
         engine: ddns_core::config::EngineConfig {
-            max_retries: 0,  // No retries for this example
+            max_retries: 0, // No retries for this example
             retry_delay_secs: 0,
             startup_delay_secs: 0,
-            min_update_interval_secs: 0,  // No rate limiting for example
-            event_channel_capacity: 100,  // Small buffer for example
+            min_update_interval_secs: 0, // No rate limiting for example
+            event_channel_capacity: 100, // Small buffer for example
             metadata: std::collections::HashMap::new(),
         },
     };
 
     // Create engine
     println!("1. Creating engine...");
-    let (engine, mut event_rx) = DdnsEngine::new(
-        Box::new(ip_source),
-        provider,
-        state_store,
-        config,
-    )?;
+    let (engine, mut event_rx) =
+        DdnsEngine::new(Box::new(ip_source), provider, state_store, config)?;
 
     // Spawn event listener (optional)
     let event_listener = tokio::spawn(async move {
@@ -210,9 +213,7 @@ async fn main() -> Result<()> {
 
     // Run engine in background
     println!("3. Starting engine in background...");
-    let engine_handle = tokio::spawn(async move {
-        engine.run().await
-    });
+    let engine_handle = tokio::spawn(async move { engine.run().await });
 
     // Let engine run briefly
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -231,10 +232,7 @@ async fn main() -> Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Wait for event listener
-    let _ = tokio::time::timeout(
-        tokio::time::Duration::from_millis(100),
-        event_listener
-    ).await;
+    let _ = tokio::time::timeout(tokio::time::Duration::from_millis(100), event_listener).await;
 
     println!("\n6. Engine stopped cleanly.");
     println!("\n=== Embedding Successful ===");

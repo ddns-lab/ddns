@@ -34,12 +34,12 @@
 //! 4. On success, update StateStore
 //! 5. Emit event for monitoring/logging
 
-use crate::traits::{IpSource, DnsProvider, StateStore, IpChangeEvent};
 use crate::config::{DdnsConfig, RecordConfig};
 use crate::error::{Error, Result};
+use crate::traits::{DnsProvider, IpChangeEvent, IpSource, StateStore};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 /// Events emitted by the DdnsEngine
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,14 +77,10 @@ pub enum EngineEvent {
     },
 
     /// Engine started
-    Started {
-        records_count: usize,
-    },
+    Started { records_count: usize },
 
     /// Engine stopped
-    Stopped {
-        reason: String,
-    },
+    Stopped { reason: String },
 }
 
 /// Core DDNS engine
@@ -265,9 +261,14 @@ impl DdnsEngine {
     ///
     /// - `event`: The IP change event
     async fn handle_ip_change(&self, event: IpChangeEvent) -> Result<()> {
-        debug!("IP change detected: {} -> {:?}",
-               event.previous_ip.map(|ip| ip.to_string()).unwrap_or("None".to_string()),
-               event.new_ip);
+        debug!(
+            "IP change detected: {} -> {:?}",
+            event
+                .previous_ip
+                .map(|ip| ip.to_string())
+                .unwrap_or("None".to_string()),
+            event.new_ip
+        );
 
         // Process each configured record
         for record in &self.records {
@@ -278,8 +279,11 @@ impl DdnsEngine {
 
             // Check if provider supports this record
             if !self.provider.supports_record(&record.name) {
-                warn!("Provider {} does not support record {}",
-                      self.provider.provider_name(), record.name);
+                warn!(
+                    "Provider {} does not support record {}",
+                    self.provider.provider_name(),
+                    record.name
+                );
                 continue;
             }
 
@@ -290,7 +294,10 @@ impl DdnsEngine {
             });
 
             // Update the record
-            match self.update_record_with_retry(&record.name, event.new_ip).await {
+            match self
+                .update_record_with_retry(&record.name, event.new_ip)
+                .await
+            {
                 Ok(_) => {
                     debug!("Successfully updated record {}", record.name);
                 }
@@ -318,7 +325,10 @@ impl DdnsEngine {
         // Check if update is needed (idempotency)
         if let Some(last_ip) = self.state_store.get_last_ip(record_name).await? {
             if last_ip == new_ip {
-                debug!("Record {} already has IP {}, skipping update", record_name, new_ip);
+                debug!(
+                    "Record {} already has IP {}, skipping update",
+                    record_name, new_ip
+                );
                 self.emit_event(EngineEvent::UpdateSkipped {
                     record_name: record_name.to_string(),
                     current_ip: new_ip,
@@ -335,8 +345,12 @@ impl DdnsEngine {
                 let min_interval = chrono::Duration::seconds(self.min_update_interval_secs as i64);
 
                 if elapsed < min_interval {
-                    debug!("Record {} updated too recently ({}s ago), skipping update. Minimum interval: {}s",
-                          record_name, elapsed.num_seconds(), self.min_update_interval_secs);
+                    debug!(
+                        "Record {} updated too recently ({}s ago), skipping update. Minimum interval: {}s",
+                        record_name,
+                        elapsed.num_seconds(),
+                        self.min_update_interval_secs
+                    );
                     self.emit_event(EngineEvent::UpdateSkipped {
                         record_name: record_name.to_string(),
                         current_ip: new_ip,
@@ -359,8 +373,10 @@ impl DdnsEngine {
                 Ok(result) => {
                     match result {
                         crate::traits::UpdateResult::Updated { previous_ip, .. } => {
-                            info!("Updated {} -> {} (previous: {:?})",
-                                  record_name, new_ip, previous_ip);
+                            info!(
+                                "Updated {} -> {} (previous: {:?})",
+                                record_name, new_ip, previous_ip
+                            );
                             self.emit_event(EngineEvent::UpdateSucceeded {
                                 record_name: record_name.to_string(),
                                 new_ip,
@@ -385,12 +401,16 @@ impl DdnsEngine {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("Update attempt {} failed for {}: {}", attempt, record_name, e);
+                    warn!(
+                        "Update attempt {} failed for {}: {}",
+                        attempt, record_name, e
+                    );
                     last_error = Some(e);
 
                     // Wait before retry (unless this was the last attempt)
                     if attempt < self.max_retries {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(self.retry_delay_secs)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(self.retry_delay_secs))
+                            .await;
                     }
                 }
             }
@@ -434,7 +454,9 @@ impl DdnsEngine {
             // Channel is full - this indicates event processing is slower than event generation
             // This is expected under extreme load and prevents unbounded memory growth
             // The event will be dropped (with a log warning)
-            warn!("Event channel full, dropping event. Consider increasing event_channel_capacity or reducing IP change rate.");
+            warn!(
+                "Event channel full, dropping event. Consider increasing event_channel_capacity or reducing IP change rate."
+            );
         }
     }
 

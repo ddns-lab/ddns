@@ -55,12 +55,12 @@
 // - List Zones: GET `/zones?name=...`
 
 use async_trait::async_trait;
-use ddns_core::traits::{DnsProvider, DnsProviderFactory, UpdateResult, RecordMetadata};
 use ddns_core::config::ProviderConfig;
+use ddns_core::traits::{DnsProvider, DnsProviderFactory, RecordMetadata, UpdateResult};
 use ddns_core::{Error, Result};
+use serde_json::Value;
 use std::net::IpAddr;
 use std::time::Duration;
-use serde_json::Value;
 
 /// Cloudflare API base URL
 const CLOUDFLARE_API_BASE: &str = "https://api.cloudflare.com/client/v4";
@@ -213,10 +213,7 @@ impl CloudflareProvider {
         // For "sub.example.com", we need "example.com"
         let parts: Vec<&str> = domain.split('.').collect();
         if parts.len() < 2 {
-            return Err(Error::config(&format!(
-                "Invalid domain name: {}",
-                domain
-            )));
+            return Err(Error::config(&format!("Invalid domain name: {}", domain)));
         }
 
         // Use the last two parts for the zone
@@ -254,8 +251,13 @@ impl CloudflareProvider {
             return match status.as_u16() {
                 401 | 403 => {
                     // Authentication or permission error
-                    Err(Error::provider("cloudflare",
-                        &format!("Authentication failed: Invalid API token or insufficient permissions. Status: {}", status)))
+                    Err(Error::provider(
+                        "cloudflare",
+                        &format!(
+                            "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
+                            status
+                        ),
+                    ))
                 }
                 404 => {
                     // Zone not found
@@ -263,40 +265,57 @@ impl CloudflareProvider {
                 }
                 429 => {
                     // Rate limit
-                    Err(Error::provider("cloudflare",
-                        &format!("Rate limit exceeded. Please retry later. Status: {}", status)))
+                    Err(Error::provider(
+                        "cloudflare",
+                        &format!(
+                            "Rate limit exceeded. Please retry later. Status: {}",
+                            status
+                        ),
+                    ))
                 }
                 500..=599 => {
                     // Cloudflare server error - transient
-                    Err(Error::provider("cloudflare",
-                        &format!("Cloudflare server error (transient): {} - {}", status, error_text)))
+                    Err(Error::provider(
+                        "cloudflare",
+                        &format!(
+                            "Cloudflare server error (transient): {} - {}",
+                            status, error_text
+                        ),
+                    ))
                 }
                 _ => {
                     // Other errors
-                    Err(Error::provider("cloudflare",
-                        &format!("Zone lookup failed: {} - {}", status, error_text)))
+                    Err(Error::provider(
+                        "cloudflare",
+                        &format!("Zone lookup failed: {} - {}", status, error_text),
+                    ))
                 }
             };
         }
 
         // Parse response
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| Error::provider("cloudflare", &format!("Failed to parse response: {}", e)))?;
+        let json: Value = response.json().await.map_err(|e| {
+            Error::provider("cloudflare", &format!("Failed to parse response: {}", e))
+        })?;
 
         // Extract zone ID
-        let zones = json["result"]
-            .as_array()
-            .ok_or_else(|| Error::provider("cloudflare", "Invalid response format: result is not an array"))?;
+        let zones = json["result"].as_array().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: result is not an array",
+            )
+        })?;
 
         let zone = zones
             .first()
             .ok_or_else(|| Error::not_found(&format!("Zone not found: {}", zone_name)))?;
 
-        let zone_id = zone["id"]
-            .as_str()
-            .ok_or_else(|| Error::provider("cloudflare", "Invalid response format: zone.id is not a string"))?;
+        let zone_id = zone["id"].as_str().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: zone.id is not a string",
+            )
+        })?;
 
         tracing::debug!("Found zone ID: {}", zone_id);
         Ok(zone_id.to_string())
@@ -355,39 +374,48 @@ impl CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Authentication failed: Invalid API token or insufficient permissions. Status: {}", status)))
-                }
-                404 => {
-                    Err(Error::not_found(&format!(
-                        "DNS record not found: {} (type: {})",
-                        record_name, record_type
-                    )))
-                }
-                429 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Rate limit exceeded. Please retry later. Status: {}", status)))
-                }
-                500..=599 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Cloudflare server error (transient): {} - {}", status, error_text)))
-                }
-                _ => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Record lookup failed: {} - {}", status, error_text)))
-                }
+                401 | 403 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
+                        status
+                    ),
+                )),
+                404 => Err(Error::not_found(&format!(
+                    "DNS record not found: {} (type: {})",
+                    record_name, record_type
+                ))),
+                429 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Rate limit exceeded. Please retry later. Status: {}",
+                        status
+                    ),
+                )),
+                500..=599 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Cloudflare server error (transient): {} - {}",
+                        status, error_text
+                    ),
+                )),
+                _ => Err(Error::provider(
+                    "cloudflare",
+                    &format!("Record lookup failed: {} - {}", status, error_text),
+                )),
             };
         }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| Error::provider("cloudflare", &format!("Failed to parse response: {}", e)))?;
+        let json: Value = response.json().await.map_err(|e| {
+            Error::provider("cloudflare", &format!("Failed to parse response: {}", e))
+        })?;
 
-        let records = json["result"]
-            .as_array()
-            .ok_or_else(|| Error::provider("cloudflare", "Invalid response format: result is not an array"))?;
+        let records = json["result"].as_array().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: result is not an array",
+            )
+        })?;
 
         let record = records.first().ok_or_else(|| {
             Error::not_found(&format!(
@@ -396,9 +424,12 @@ impl CloudflareProvider {
             ))
         })?;
 
-        let record_id = record["id"]
-            .as_str()
-            .ok_or_else(|| Error::provider("cloudflare", "Invalid response format: record.id is not a string"))?;
+        let record_id = record["id"].as_str().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: record.id is not a string",
+            )
+        })?;
 
         tracing::debug!("Found record ID: {}", record_id);
         Ok(record_id.to_string())
@@ -459,7 +490,9 @@ impl DnsProvider for CloudflareProvider {
         let zone_id = self.get_zone_id(record_name).await?;
 
         // Step 2: Get record ID
-        let record_id = self.get_record_id(&zone_id, record_name, record_type).await?;
+        let record_id = self
+            .get_record_id(&zone_id, record_name, record_type)
+            .await?;
 
         // Step 3: Get current record to check if IP matches
         let get_url = format!(
@@ -484,40 +517,52 @@ impl DnsProvider for CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Authentication failed: Invalid API token or insufficient permissions. Status: {}", status)))
-                }
-                404 => {
-                    Err(Error::not_found(&format!("DNS record not found: {}", record_name)))
-                }
-                429 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Rate limit exceeded. Please retry later. Status: {}", status)))
-                }
-                500..=599 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Cloudflare server error (transient): {} - {}", status, error_text)))
-                }
-                _ => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Failed to get record: {} - {}", status, error_text)))
-                }
+                401 | 403 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
+                        status
+                    ),
+                )),
+                404 => Err(Error::not_found(&format!(
+                    "DNS record not found: {}",
+                    record_name
+                ))),
+                429 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Rate limit exceeded. Please retry later. Status: {}",
+                        status
+                    ),
+                )),
+                500..=599 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Cloudflare server error (transient): {} - {}",
+                        status, error_text
+                    ),
+                )),
+                _ => Err(Error::provider(
+                    "cloudflare",
+                    &format!("Failed to get record: {} - {}", status, error_text),
+                )),
             };
         }
 
-        let record_json: Value = get_response
-            .json()
-            .await
-            .map_err(|e| Error::provider("cloudflare", &format!("Failed to parse response: {}", e)))?;
+        let record_json: Value = get_response.json().await.map_err(|e| {
+            Error::provider("cloudflare", &format!("Failed to parse response: {}", e))
+        })?;
 
-        let current_ip_str = record_json["result"]["content"]
-            .as_str()
-            .ok_or_else(|| Error::provider("cloudflare", "Invalid response format: content is not a string"))?;
+        let current_ip_str = record_json["result"]["content"].as_str().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: content is not a string",
+            )
+        })?;
 
-        let current_ip: IpAddr = current_ip_str
-            .parse()
-            .map_err(|e| Error::provider("cloudflare", &format!("Invalid IP in response: {}", e)))?;
+        let current_ip: IpAddr = current_ip_str.parse().map_err(|e| {
+            Error::provider("cloudflare", &format!("Invalid IP in response: {}", e))
+        })?;
 
         // Step 4: If IP matches, return Unchanged
         if current_ip == new_ip {
@@ -532,7 +577,11 @@ impl DnsProvider for CloudflareProvider {
         // Step 5: Update the record (or dry-run)
         tracing::info!(
             "{} DNS record: {} -> {} (was: {})",
-            if self.dry_run { "Would update" } else { "Updating" },
+            if self.dry_run {
+                "Would update"
+            } else {
+                "Updating"
+            },
             record_name,
             new_ip,
             current_ip
@@ -579,30 +628,46 @@ impl DnsProvider for CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Authentication failed: Invalid API token or insufficient permissions. Status: {}", status)))
-                }
-                409 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Conflict: Record is being updated by another process. Status: {}", status)))
-                }
-                429 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Rate limit exceeded. Please retry later. Status: {}", status)))
-                }
-                500..=599 => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Cloudflare server error (transient): {} - {}", status, error_text)))
-                }
-                _ => {
-                    Err(Error::provider("cloudflare",
-                        &format!("Failed to update record: {} - {}", status, error_text)))
-                }
+                401 | 403 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
+                        status
+                    ),
+                )),
+                409 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Conflict: Record is being updated by another process. Status: {}",
+                        status
+                    ),
+                )),
+                429 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Rate limit exceeded. Please retry later. Status: {}",
+                        status
+                    ),
+                )),
+                500..=599 => Err(Error::provider(
+                    "cloudflare",
+                    &format!(
+                        "Cloudflare server error (transient): {} - {}",
+                        status, error_text
+                    ),
+                )),
+                _ => Err(Error::provider(
+                    "cloudflare",
+                    &format!("Failed to update record: {} - {}", status, error_text),
+                )),
             };
         }
 
-        tracing::info!("DNS record updated successfully: {} -> {}", record_name, new_ip);
+        tracing::info!(
+            "DNS record updated successfully: {} -> {}",
+            record_name,
+            new_ip
+        );
         Ok(UpdateResult::Updated {
             previous_ip: Some(current_ip),
             new_ip,
@@ -644,10 +709,13 @@ impl DnsProviderFactory for CloudflareFactory {
                 // Check for dry-run mode environment variable
                 let dry_run = std::env::var("DDNS_MODE")
                     .unwrap_or_default()
-                    .to_lowercase() == "dry-run";
+                    .to_lowercase()
+                    == "dry-run";
 
                 if dry_run {
-                    tracing::warn!("Cloudflare provider running in DRY-RUN mode - no changes will be made");
+                    tracing::warn!(
+                        "Cloudflare provider running in DRY-RUN mode - no changes will be made"
+                    );
                 }
 
                 Ok(Box::new(CloudflareProvider::new(
@@ -722,8 +790,14 @@ mod tests {
         let provider_dry = CloudflareProvider::new_dry_run("token", None, None);
         let provider_live = CloudflareProvider::new_live("token", None, None);
 
-        assert!(provider_dry.dry_run, "Dry-run provider should have dry_run=true");
-        assert!(!provider_live.dry_run, "Live provider should have dry_run=false");
+        assert!(
+            provider_dry.dry_run,
+            "Dry-run provider should have dry_run=true"
+        );
+        assert!(
+            !provider_live.dry_run,
+            "Live provider should have dry_run=false"
+        );
     }
 
     #[test]
@@ -745,12 +819,8 @@ mod tests {
     #[test]
     fn test_zone_id_preconfigured() {
         // Test that pre-configured zone ID is returned immediately
-        let provider = CloudflareProvider::new(
-            "test_token",
-            Some("test_zone_id".to_string()),
-            None,
-            false,
-        );
+        let provider =
+            CloudflareProvider::new("test_token", Some("test_zone_id".to_string()), None, false);
 
         // This test verifies the logic, but doesn't make actual API calls
         // In a real test, we'd use mockito or similar for HTTP mocking
@@ -760,12 +830,7 @@ mod tests {
     #[test]
     fn test_api_token_not_exposed_in_debug() {
         // Test that API token is not exposed in Debug output
-        let provider = CloudflareProvider::new(
-            "secret_token_12345",
-            None,
-            None,
-            false,
-        );
+        let provider = CloudflareProvider::new("secret_token_12345", None, None, false);
 
         let debug_str = format!("{:?}", provider);
         assert!(!debug_str.contains("secret_token_12345"));
@@ -777,12 +842,7 @@ mod tests {
     #[test]
     fn test_http_timeout_configured() {
         // Test that HTTP client is configured with timeout
-        let provider = CloudflareProvider::new(
-            "test_token",
-            None,
-            None,
-            false,
-        );
+        let provider = CloudflareProvider::new("test_token", None, None, false);
 
         // Verify client was created successfully
         // (we can't inspect the timeout directly, but successful creation

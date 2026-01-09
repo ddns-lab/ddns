@@ -6,10 +6,10 @@
 //! - [`DnsProvider`]: Update DNS records via provider APIs
 //! - [`StateStore`]: Persistent state management for idempotency
 
-pub mod ip_source;
 pub mod dns_provider;
+pub mod ip_source;
 pub mod state_store;
 
-pub use ip_source::{IpSource, IpChangeEvent, IpVersion, IpSourceFactory};
-pub use dns_provider::{DnsProvider, UpdateResult, RecordMetadata, DnsProviderFactory};
-pub use state_store::{StateStore, StateRecord, StateStoreFactory};
+pub use dns_provider::{DnsProvider, DnsProviderFactory, RecordMetadata, UpdateResult};
+pub use ip_source::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion};
+pub use state_store::{StateRecord, StateStore, StateStoreFactory};

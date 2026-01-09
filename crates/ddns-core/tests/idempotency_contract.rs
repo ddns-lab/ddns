@@ -12,11 +12,11 @@
 
 mod common;
 
+use common::*;
+use ddns_core::DdnsEngine;
 use ddns_core::traits::IpChangeEvent;
 use ddns_core::traits::StateStore;
-use ddns_core::DdnsEngine;
 use std::net::IpAddr;
-use common::*;
 
 #[tokio::test]
 async fn duplicate_ip_does_not_trigger_dns_update() {
@@ -44,9 +44,8 @@ async fn duplicate_ip_does_not_trigger_dns_update() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -63,7 +62,11 @@ async fn duplicate_ip_does_not_trigger_dns_update() {
 
     // Assert: Only 1 update (second skipped due to idempotency)
     let count = provider_arc.update_call_count();
-    assert_eq!(count, 1, "Expected 1 update for 2 identical IP events, got {}", count);
+    assert_eq!(
+        count, 1,
+        "Expected 1 update for 2 identical IP events, got {}",
+        count
+    );
 }
 
 #[tokio::test]
@@ -94,9 +97,8 @@ async fn restart_simulation_no_duplicate_updates() {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-        let engine_handle = tokio::spawn(async move {
-            engine.run_with_shutdown(Some(shutdown_rx)).await
-        });
+        let engine_handle =
+            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -114,7 +116,11 @@ async fn restart_simulation_no_duplicate_updates() {
         assert_eq!(last_ip, Some(initial_ip), "State should persist last IP");
 
         // Verify: DNS was updated once
-        assert_eq!(provider_arc.update_call_count(), 1, "First run should update DNS once");
+        assert_eq!(
+            provider_arc.update_call_count(),
+            1,
+            "First run should update DNS once"
+        );
     }
 
     // Second "run": Same IP, should skip update due to state
@@ -129,7 +135,10 @@ async fn restart_simulation_no_duplicate_updates() {
         let config = minimal_config("example.com");
 
         // Pre-populate state with the IP from first run
-        state_store_arc.set_last_ip("example.com", initial_ip).await.unwrap();
+        state_store_arc
+            .set_last_ip("example.com", initial_ip)
+            .await
+            .unwrap();
 
         let (engine, _event_rx) = DdnsEngine::new(
             Box::new(ip_source),
@@ -141,9 +150,8 @@ async fn restart_simulation_no_duplicate_updates() {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-        let engine_handle = tokio::spawn(async move {
-            engine.run_with_shutdown(Some(shutdown_rx)).await
-        });
+        let engine_handle =
+            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -157,7 +165,11 @@ async fn restart_simulation_no_duplicate_updates() {
         engine_handle.await.unwrap().unwrap();
 
         // Verify: DNS was NOT updated (idempotency from state)
-        assert_eq!(provider_arc.update_call_count(), 0, "Second run should skip update (state exists)");
+        assert_eq!(
+            provider_arc.update_call_count(),
+            0,
+            "Second run should skip update (state exists)"
+        );
     }
 }
 
@@ -188,9 +200,8 @@ async fn ip_change_after_restart_triggers_update() {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-        let engine_handle = tokio::spawn(async move {
-            engine.run_with_shutdown(Some(shutdown_rx)).await
-        });
+        let engine_handle =
+            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -212,7 +223,10 @@ async fn ip_change_after_restart_triggers_update() {
         // Pre-populate state with old IP
         let state_store = Box::new(MockStateStore::new());
         let state_store_arc = std::sync::Arc::new(state_store);
-        state_store_arc.set_last_ip("example.com", initial_ip).await.unwrap();
+        state_store_arc
+            .set_last_ip("example.com", initial_ip)
+            .await
+            .unwrap();
 
         let config = minimal_config("example.com");
 
@@ -226,9 +240,8 @@ async fn ip_change_after_restart_triggers_update() {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-        let engine_handle = tokio::spawn(async move {
-            engine.run_with_shutdown(Some(shutdown_rx)).await
-        });
+        let engine_handle =
+            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -242,7 +255,11 @@ async fn ip_change_after_restart_triggers_update() {
         engine_handle.await.unwrap().unwrap();
 
         // Verify: DNS WAS updated (IP changed)
-        assert_eq!(provider_arc.update_call_count(), 1, "Second run with new IP should update DNS");
+        assert_eq!(
+            provider_arc.update_call_count(),
+            1,
+            "Second run with new IP should update DNS"
+        );
 
         // Verify: State was updated
         let last_ip = state_store_arc.get_last_ip("example.com").await.unwrap();

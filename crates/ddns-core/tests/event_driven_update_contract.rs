@@ -14,10 +14,10 @@
 
 mod common;
 
-use ddns_core::traits::IpChangeEvent;
-use ddns_core::DdnsEngine;
-use std::net::IpAddr;
 use common::*;
+use ddns_core::DdnsEngine;
+use ddns_core::traits::IpChangeEvent;
+use std::net::IpAddr;
 
 #[tokio::test]
 async fn one_ip_change_triggers_exactly_one_dns_update() {
@@ -53,15 +53,11 @@ async fn one_ip_change_triggers_exactly_one_dns_update() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     // Act: Run engine in background
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Wait for engine to start
-    let _ = tokio::time::timeout(
-        tokio::time::Duration::from_millis(100),
-        event_rx.recv()
-    ).await;
+    let _ = tokio::time::timeout(tokio::time::Duration::from_millis(100), event_rx.recv()).await;
 
     // Act: Emit exactly one IP change event
     let new_ip = IpAddr::from([10, 0, 0, 1]);
@@ -108,9 +104,8 @@ async fn multiple_ip_changes_trigger_multiple_updates() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     // Wait for startup
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -131,7 +126,11 @@ async fn multiple_ip_changes_trigger_multiple_updates() {
 
     // Assert: 3 updates for 3 events
     let count = provider_arc.update_call_count();
-    assert_eq!(count, 3, "Expected 3 updates for 3 IP events, got {}", count);
+    assert_eq!(
+        count, 3,
+        "Expected 3 updates for 3 IP events, got {}",
+        count
+    );
 }
 
 #[tokio::test]
@@ -157,9 +156,8 @@ async fn same_ip_does_not_trigger_update() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -176,7 +174,11 @@ async fn same_ip_does_not_trigger_update() {
 
     // Assert: Only 1 update (second skipped due to idempotency)
     let count = provider_arc.update_call_count();
-    assert_eq!(count, 1, "Expected 1 update for 2 identical IP events, got {}", count);
+    assert_eq!(
+        count, 1,
+        "Expected 1 update for 2 identical IP events, got {}",
+        count
+    );
 }
 
 #[tokio::test]
@@ -207,9 +209,8 @@ async fn no_polling_between_events() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -227,8 +228,7 @@ async fn no_polling_between_events() {
     // Assert: Still only 1 update (no polling occurred)
     let count = provider_arc.update_call_count();
     assert_eq!(
-        count,
-        1,
+        count, 1,
         "Expected 1 update without polling, got {} (possible polling detected)",
         count
     );

@@ -193,10 +193,7 @@ pub trait DnsProvider: Send + Sync {
     ///
     /// - `Ok(RecordMetadata)`: The record's current metadata
     /// - `Err(Error)`: If the record doesn't exist or the request failed
-    async fn get_record(
-        &self,
-        record_name: &str,
-    ) -> Result<RecordMetadata, crate::Error>;
+    async fn get_record(&self, record_name: &str) -> Result<RecordMetadata, crate::Error>;
 
     /// Check if this provider supports the given record type
     ///

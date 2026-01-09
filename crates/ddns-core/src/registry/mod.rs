@@ -37,10 +37,10 @@
 //! }
 //! ```
 
+use crate::config::{IpSourceConfig, ProviderConfig};
+use crate::error::{Error, Result};
 use crate::traits::{DnsProvider, IpSource, StateStore};
 use crate::traits::{DnsProviderFactory, IpSourceFactory, StateStoreFactory};
-use crate::config::{ProviderConfig, IpSourceConfig};
-use crate::error::{Error, Result};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -114,7 +114,11 @@ impl ProviderRegistry {
     ///
     /// - `name`: State store type name (e.g., "file", "memory")
     /// - `factory`: Factory object for creating state store instances
-    pub fn register_state_store(&self, name: impl Into<String>, factory: Box<dyn StateStoreFactory>) {
+    pub fn register_state_store(
+        &self,
+        name: impl Into<String>,
+        factory: Box<dyn StateStoreFactory>,
+    ) {
         let name = name.into();
         let mut stores = self.state_stores.write().unwrap();
         stores.insert(name, factory);
@@ -151,9 +155,9 @@ impl ProviderRegistry {
         let provider_type = config.type_name();
         let providers = self.providers.read().unwrap();
 
-        let factory = providers.get(provider_type).ok_or_else(|| {
-            Error::config(format!("Unknown provider type: {}", provider_type))
-        })?;
+        let factory = providers
+            .get(provider_type)
+            .ok_or_else(|| Error::config(format!("Unknown provider type: {}", provider_type)))?;
 
         factory.create(config)
     }
@@ -177,9 +181,9 @@ impl ProviderRegistry {
 
         let sources = self.ip_sources.read().unwrap();
 
-        let factory = sources.get(source_type).ok_or_else(|| {
-            Error::config(format!("Unknown IP source type: {}", source_type))
-        })?;
+        let factory = sources
+            .get(source_type)
+            .ok_or_else(|| Error::config(format!("Unknown IP source type: {}", source_type)))?;
 
         factory.create(config)
     }
@@ -206,9 +210,9 @@ impl ProviderRegistry {
 
         let stores = self.state_stores.read().unwrap();
 
-        let factory = stores.get(store_type).ok_or_else(|| {
-            Error::config(format!("Unknown state store type: {}", store_type))
-        })?;
+        let factory = stores
+            .get(store_type)
+            .ok_or_else(|| Error::config(format!("Unknown state store type: {}", store_type)))?;
 
         factory.create(&serde_json::to_value(config)?)
     }
@@ -293,10 +297,7 @@ mod tests {
     struct MockProviderFactory;
 
     impl DnsProviderFactory for MockProviderFactory {
-        fn create(
-            &self,
-            _config: &ProviderConfig,
-        ) -> Result<Box<dyn DnsProvider>> {
+        fn create(&self, _config: &ProviderConfig) -> Result<Box<dyn DnsProvider>> {
             Err(Error::not_found("Mock provider not implemented"))
         }
     }

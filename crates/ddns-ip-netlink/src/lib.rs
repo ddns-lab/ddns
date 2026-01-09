@@ -28,8 +28,8 @@
 //
 // This crate only compiles on Linux due to Netlink being a Linux-specific feature.
 
-use ddns_core::traits::{IpSource, IpSourceFactory};
 use ddns_core::config::IpSourceConfig;
+use ddns_core::traits::{IpSource, IpSourceFactory};
 use ddns_core::{Error, Result};
 
 /// Netlink-based IP source for Linux
@@ -98,12 +98,20 @@ impl NetlinkIpSource {
                 // Prefer global addresses (lower score = better)
                 match ip {
                     IpAddr::V4(v4) => {
-                        if v4.is_private() { 1 } else { 0 }
+                        if v4.is_private() {
+                            1
+                        } else {
+                            0
+                        }
                     }
                     IpAddr::V6(v6) => {
-                        if v6.is_loopback() { 3 }
-                        else if v6.is_unique_local() { 2 }
-                        else { 0 }
+                        if v6.is_loopback() {
+                            3
+                        } else if v6.is_unique_local() {
+                            2
+                        } else {
+                            0
+                        }
                     }
                 }
             })
@@ -164,7 +172,9 @@ impl IpSourceFactory for NetlinkFactory {
 #[cfg(not(target_os = "linux"))]
 impl IpSourceFactory for NetlinkFactory {
     fn create(&self, _config: &IpSourceConfig) -> Result<Box<dyn IpSource>> {
-        Err(Error::config("Netlink IP source is only supported on Linux"))
+        Err(Error::config(
+            "Netlink IP source is only supported on Linux",
+        ))
     }
 }
 
@@ -209,9 +219,9 @@ mod tests {
         let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(IpVersion::V4));
 
         let addresses = vec![
-            IpAddr::from([127, 0, 0, 1]), // loopback
+            IpAddr::from([127, 0, 0, 1]),   // loopback
             IpAddr::from([192, 168, 1, 1]), // private
-            IpAddr::from([8, 8, 8, 8]), // public
+            IpAddr::from([8, 8, 8, 8]),     // public
         ];
 
         let best = source.select_best_address(&addresses);
@@ -224,14 +234,17 @@ mod tests {
         let source = NetlinkIpSource::new(Some("eth0".to_string()), Some(IpVersion::V6));
 
         let addresses = vec![
-            IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]), // loopback
+            IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]),      // loopback
             IpAddr::from([0xfe80, 0, 0, 0, 0, 0, 0, 1]), // link-local
             IpAddr::from([0xfc00, 0, 0, 0, 0, 0, 0, 1]), // ULA
             IpAddr::from([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888]), // global
         ];
 
         let best = source.select_best_address(&addresses);
-        assert_eq!(best, Some(IpAddr::from([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888])));
+        assert_eq!(
+            best,
+            Some(IpAddr::from([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888]))
+        );
     }
 
     #[test]

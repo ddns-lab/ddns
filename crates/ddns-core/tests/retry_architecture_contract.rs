@@ -18,10 +18,10 @@
 
 mod common;
 
-use ddns_core::traits::IpChangeEvent;
-use ddns_core::DdnsEngine;
-use std::net::IpAddr;
 use common::*;
+use ddns_core::DdnsEngine;
+use ddns_core::traits::IpChangeEvent;
+use std::net::IpAddr;
 
 #[tokio::test]
 async fn retries_can_be_disabled_via_config() {
@@ -43,8 +43,11 @@ async fn retries_can_be_disabled_via_config() {
             _record_name: &str,
             _new_ip: IpAddr,
         ) -> ddns_core::Result<ddns_core::traits::UpdateResult> {
-            self.update_call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Err(ddns_core::error::Error::Other("Provider unavailable".to_string()))
+            self.update_call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(ddns_core::error::Error::Other(
+                "Provider unavailable".to_string(),
+            ))
         }
 
         async fn get_record(
@@ -93,9 +96,8 @@ async fn retries_can_be_disabled_via_config() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -110,7 +112,9 @@ async fn retries_can_be_disabled_via_config() {
     let _ = engine_handle.await.unwrap();
 
     // Assert: With max_retries=0, exactly ONE attempt should be made
-    let final_count = provider_arc.update_call_count.load(std::sync::atomic::Ordering::SeqCst);
+    let final_count = provider_arc
+        .update_call_count
+        .load(std::sync::atomic::Ordering::SeqCst);
 
     assert_eq!(
         final_count, 1,
@@ -139,8 +143,11 @@ async fn retries_honor_explicit_configuration() {
             _record_name: &str,
             _new_ip: IpAddr,
         ) -> ddns_core::Result<ddns_core::traits::UpdateResult> {
-            self.update_call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Err(ddns_core::error::Error::Other("Provider unavailable".to_string()))
+            self.update_call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(ddns_core::error::Error::Other(
+                "Provider unavailable".to_string(),
+            ))
         }
 
         async fn get_record(
@@ -175,7 +182,7 @@ async fn retries_honor_explicit_configuration() {
 
     // Explicitly configure retries
     let mut config = config;
-    config.engine.max_retries = 2;  // 1 initial + 2 retries = 3 total
+    config.engine.max_retries = 2; // 1 initial + 2 retries = 3 total
     config.engine.retry_delay_secs = 0; // No delay for faster test
 
     let (engine, _event_rx) = DdnsEngine::new(
@@ -190,9 +197,8 @@ async fn retries_honor_explicit_configuration() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let engine_handle = tokio::spawn(async move {
-        engine.run_with_shutdown(Some(shutdown_rx)).await
-    });
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -208,7 +214,9 @@ async fn retries_honor_explicit_configuration() {
     let _ = engine_handle.await.unwrap();
 
     // Assert: With max_retries=2, we expect 3 attempts (1 initial + 2 retries)
-    let final_count = provider_arc.update_call_count.load(std::sync::atomic::Ordering::SeqCst);
+    let final_count = provider_arc
+        .update_call_count
+        .load(std::sync::atomic::Ordering::SeqCst);
 
     assert_eq!(
         final_count, 3,

@@ -20,14 +20,14 @@
 // - Container deployments where restart is acceptable
 // - Scenarios where initial DNS update is harmless
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use async_trait::async_trait;
 
-use crate::traits::state_store::{StateStore, StateRecord};
 use crate::Error;
+use crate::traits::state_store::{StateRecord, StateStore};
 
 /// In-memory state store implementation
 ///

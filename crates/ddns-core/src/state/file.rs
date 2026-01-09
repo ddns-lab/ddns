@@ -29,17 +29,17 @@
 // }
 // ```
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use async_trait::async_trait;
+use tokio::sync::RwLock;
 
-use crate::traits::state_store::{StateStore, StateRecord};
 use crate::Error;
+use crate::traits::state_store::{StateRecord, StateStore};
 
 /// State file format version
 /// Used for future migration if format changes
@@ -112,7 +112,11 @@ impl FileStateStore {
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() && !parent.exists() {
                 fs::create_dir_all(parent).await.map_err(|e| {
-                    Error::config(&format!("Failed to create state directory {}: {}", parent.display(), e))
+                    Error::config(&format!(
+                        "Failed to create state directory {}: {}",
+                        parent.display(),
+                        e
+                    ))
                 })?;
             }
         }
@@ -145,11 +149,12 @@ impl FileStateStore {
             Err(e) => {
                 // Check if it's a JSON parse error (corruption)
                 let error_str = e.to_string().to_lowercase();
-                if error_str.contains("json") ||
-                   error_str.contains("parse") ||
-                   error_str.contains("format") ||
-                   error_str.contains("expected value") ||
-                   error_str.contains("serde") {
+                if error_str.contains("json")
+                    || error_str.contains("parse")
+                    || error_str.contains("format")
+                    || error_str.contains("expected value")
+                    || error_str.contains("serde")
+                {
                     tracing::warn!(
                         "State file appears corrupted: {}. Attempting recovery from backup.",
                         e
@@ -204,7 +209,11 @@ impl FileStateStore {
         }
 
         let content = fs::read_to_string(path).await.map_err(|e| {
-            Error::state_store(&format!("Failed to read state file {}: {}", path.display(), e))
+            Error::state_store(&format!(
+                "Failed to read state file {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         // Parse JSON
@@ -241,9 +250,8 @@ impl FileStateStore {
             records: records.clone(),
         };
 
-        let json = serde_json::to_string_pretty(&state_file).map_err(|e| {
-            Error::state_store(&format!("Failed to serialize state: {}", e))
-        })?;
+        let json = serde_json::to_string_pretty(&state_file)
+            .map_err(|e| Error::state_store(&format!("Failed to serialize state: {}", e)))?;
 
         // Write to temporary file first
         let temp_path = self.temp_path();
@@ -364,7 +372,9 @@ impl StateStore for FileStateStore {
     async fn set_record(&self, record_name: &str, record: &StateRecord) -> Result<(), Error> {
         {
             let mut state_guard = self.state.write().await;
-            state_guard.records.insert(record_name.to_string(), record.clone());
+            state_guard
+                .records
+                .insert(record_name.to_string(), record.clone());
             state_guard.dirty = true;
         }
 
@@ -457,11 +467,15 @@ mod tests {
             "Failed to create store from corrupted file. Backup should have been recovered.\n\
              Main file: {:?}\n\
              Backup file: {:?}",
-             path, backup_path
+            path, backup_path
         ));
         let recovered = store2.get_last_ip("example.com").await.unwrap();
         // Should have recovered the PREVIOUS value (from backup, before last write)
-        assert_eq!(recovered, Some(ip1), "Backup should contain previous state, not latest");
+        assert_eq!(
+            recovered,
+            Some(ip1),
+            "Backup should contain previous state, not latest"
+        );
     }
 
     #[tokio::test]

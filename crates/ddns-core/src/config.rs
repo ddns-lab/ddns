@@ -100,10 +100,14 @@ impl IpSourceConfig {
             }
             IpSourceConfig::Custom { factory, config } => {
                 if factory.is_empty() {
-                    return Err(crate::Error::config("Custom IP source factory cannot be empty"));
+                    return Err(crate::Error::config(
+                        "Custom IP source factory cannot be empty",
+                    ));
                 }
                 if config.is_null() {
-                    return Err(crate::Error::config("Custom IP source config cannot be null"));
+                    return Err(crate::Error::config(
+                        "Custom IP source config cannot be null",
+                    ));
                 }
                 Ok(())
             }
@@ -168,10 +172,14 @@ impl ProviderConfig {
             }
             ProviderConfig::Custom { factory, config } => {
                 if factory.is_empty() {
-                    return Err(crate::Error::config("Custom provider factory cannot be empty"));
+                    return Err(crate::Error::config(
+                        "Custom provider factory cannot be empty",
+                    ));
                 }
                 if config.is_null() {
-                    return Err(crate::Error::config("Custom provider config cannot be null"));
+                    return Err(crate::Error::config(
+                        "Custom provider config cannot be null",
+                    ));
                 }
                 Ok(())
             }
