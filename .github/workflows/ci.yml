@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - "1.85"
+          - "1.91"
           - stable
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +90,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.91"
 
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -120,7 +120,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.91"
 
       - name: Check without default features
         run: cargo check --workspace --no-default-features

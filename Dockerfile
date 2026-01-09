@@ -15,8 +15,8 @@
 # =============================================================================
 # Build Stage
 # =============================================================================
-# Use latest Rust for Edition 2024 support (1.85+)
-FROM rust:alpine AS builder
+# Use Rust 1.91+ for Edition 2024 support
+FROM rust:1.91-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
