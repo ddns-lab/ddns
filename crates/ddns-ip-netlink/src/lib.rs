@@ -14,7 +14,6 @@
 // This crate only compiles on Linux due to Netlink being a Linux-specific feature.
 
 use ddns_core::config::IpSourceConfig;
-use ddns_core::config::IpVersion as ConfigIpVersion;
 
 #[cfg(target_os = "linux")]
 use ddns_core::traits::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion as TraitsIpVersion};
