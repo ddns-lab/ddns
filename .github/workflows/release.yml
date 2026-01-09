@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binaries
+        run: |
+          cargo build --release --bin ddnsd
+
+      - name: Create tarball
+        run: |
+          cd target/release
+          tar czf ddnsd-linux-x86_64.tar.gz ddnsd
+          cd ../..
+
+      - name: Generate checksums
+        run: |
+          cd target/release
+          sha256sum ddnsd-linux-x86_64.tar.gz > checksums.txt
+          cd ../..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            target/release/ddnsd-linux-x86_64.tar.gz
+            target/release/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

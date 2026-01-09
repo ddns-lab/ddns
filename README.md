@@ -1,5 +1,10 @@
 # DDNS
 
+[![CI](https://github.com/ddns-lab/ddns/workflows/CI/badge.svg)](https://github.com/ddns-lab/ddns/actions)
+[![Security Audit](https://github.com/ddns-lab/ddns/workflows/Security%20Audit/badge.svg)](https://github.com/ddns-lab/ddns/actions)
+[![Docker](https://github.com/ddns-lab/ddns/workflows/Docker%20Build/badge.svg)](https://github.com/ddns-lab/ddns/actions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 An event-driven Dynamic DNS system built with Rust, designed for high performance and minimal resource consumption.
 
 ## Project Goals
@@ -19,6 +24,7 @@ An event-driven Dynamic DNS system built with Rust, designed for high performanc
 - ✅ **Dry-run mode**: Safe testing without making actual changes
 - ✅ **Comprehensive error handling**: Clear error messages for all failure scenarios
 - ✅ **Security-first**: API tokens never logged, all credentials via environment variables
+- ✅ **CI/CD**: GitHub Actions for testing, security auditing, and multi-platform builds
 
 ## Architecture
 
@@ -175,3 +181,15 @@ Apache License 2.0
 ## Contributing
 
 Please read [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) before contributing. This project has strict architectural constraints that must be followed.
+
+### CI/CD Status
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **CI**: Runs tests, formatting checks, and linting on every push and PR
+- **Security Audit**: Automated dependency vulnerability scanning
+- **Docker Build**: Validates Docker image builds on all platforms
+- **Dependencies**: Weekly check for outdated dependencies
+- **Coverage**: Code coverage tracking (with Codecov integration)
+
+All checks must pass before code can be merged into main.
