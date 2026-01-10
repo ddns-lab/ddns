@@ -340,7 +340,10 @@ impl IpSource for NetlinkIpSource {
             }
 
             // Bind to address
-            let addr = SocketAddr::new(0, libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR);
+            let addr = SocketAddr::new(
+                0,
+                (libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR) as u32,
+            );
             if let Err(e) = sock.bind(&addr) {
                 tracing::error!("Failed to bind netlink socket: {}", e);
                 drop(tx);
@@ -434,7 +437,17 @@ impl IpSource for NetlinkIpSource {
                                         // Apply debounce
                                         if now.duration_since(last_event) > debounce_duration {
                                             if let Some(ip) = new_ip {
-                                                if let Err(e) = tx.send(IpChangeEvent { ip }) {
+                                                let version = if ip.is_ipv4() {
+                                                    TraitsIpVersion::V4
+                                                } else {
+                                                    TraitsIpVersion::V6
+                                                };
+
+                                                if let Err(e) = tx.send(IpChangeEvent {
+                                                    new_ip: ip,
+                                                    previous_ip: last_ip,
+                                                    version,
+                                                }) {
                                                     tracing::error!(
                                                         "Failed to send IP change event: {}",
                                                         e
