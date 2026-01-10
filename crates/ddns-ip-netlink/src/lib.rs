@@ -129,10 +129,10 @@ impl NetlinkIpSource {
             let if_name = parts[5];
 
             // Filter by interface if specified
-            if let Some(ref iface) = self.interface {
-                if iface != if_name {
-                    continue;
-                }
+            if let Some(ref iface) = self.interface
+                && iface != if_name
+            {
+                continue;
             }
 
             // Parse hex IPv6 address
@@ -461,7 +461,7 @@ mod tests {
 
         // IPv6 addresses
         assert!(source.should_accept_ip(&"2001:db8::1".parse().unwrap()));
-        assert!(source.should_accept_ip(&"::1".parse().unwrap()));
+        assert!(source.should_accept_ip(&"2001:4860:4860::8888".parse().unwrap()));
 
         // Special addresses
         assert!(!source.should_accept_ip(&"::1".parse().unwrap())); // loopback
