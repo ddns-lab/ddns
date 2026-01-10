@@ -108,39 +108,6 @@ impl NetlinkIpSource {
         }
     }
 
-    /// Get interface index by name using libc directly
-    fn get_interface_index(&self, name: &str) -> Result<u32> {
-        use std::ffi::CString;
-
-        let c_name = CString::new(name).map_err(|_| Error::config("Invalid interface name"))?;
-
-        unsafe {
-            let mut ifreq: libc::ifreq = std::mem::zeroed();
-            std::ptr::copy_nonoverlapping(
-                name.as_bytes().as_ptr() as *const i8,
-                ifreq.ifr_name.as_mut_ptr(),
-                name.len().min(libc::IFNAMSIZ - 1),
-            );
-
-            // Create socket to query interface
-            let sock = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
-            if sock < 0 {
-                return Err(Error::ip_source("Failed to create socket"));
-            }
-
-            let ret = libc::ioctl(sock, libc::SIOCGIFINDEX, &ifreq);
-            libc::close(sock);
-
-            if ret < 0 {
-                return Err(Error::not_found(&format!("Interface '{}' not found", name)));
-            }
-
-            // Extract interface index from ifru_ivalue field
-            // Note: The layout of ifr_ifru varies by platform
-            Ok(unsafe { ifreq.ifr_ifru.ifru_ivalue as u32 })
-        }
-    }
-
     /// Query current IP addresses by reading from /proc/net/if_inet6
     fn query_addresses_proc(&self) -> Result<Vec<IpAddr>> {
         use std::fs::read_to_string;
@@ -159,7 +126,6 @@ impl NetlinkIpSource {
             // Parse IPv6 address from /proc/net/if_inet6
             // Format: addr index prefix_len scope status iface_name
             let addr_hex = parts[0];
-            let if_index: u32 = parts[1].parse().unwrap_or(0);
             let if_name = parts[5];
 
             // Filter by interface if specified
@@ -216,11 +182,6 @@ impl NetlinkIpSource {
             };
 
             for iface_name in interfaces_to_check {
-                let c_name = match CString::new(iface_name.as_str()) {
-                    Ok(name) => name,
-                    Err(_) => continue,
-                };
-
                 let mut ifreq: libc::ifreq = std::mem::zeroed();
                 std::ptr::copy_nonoverlapping(
                     iface_name.as_bytes().as_ptr() as *const i8,
