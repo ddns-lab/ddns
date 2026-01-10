@@ -16,17 +16,13 @@
 # Build Stage
 # =============================================================================
 # Use Rust 1.91+ for Edition 2024 support
-FROM rust:1.91-alpine AS builder
+FROM rust:1.91-slim AS builder
 
 # Install build dependencies
-RUN apk add --no-cache \
-    musl-dev \
-    pkgconfig \
-    openssl-dev \
-    openssl-libs \
-    static \
-    # For netlink support (Linux) - not needed for Docker builds
-    # libnetfilter_queue-dev
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -42,14 +38,16 @@ RUN cargo build --release --bin ddnsd --no-default-features --features cloudflar
 # =============================================================================
 # Runtime Stage
 # =============================================================================
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 # Install runtime dependencies (ca-certificates for SSL/TLS)
-RUN apk add --no-cache ca-certificates
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -S ddns && \
-    adduser -S ddns -G ddns -h /var/lib/ddns -s /sbin/nologin
+RUN groupadd -r ddns && \
+    useradd -r -g ddns -d /var/lib/ddns -s /sbin/nologin ddns
 
 # Create state directory
 RUN mkdir -p /var/lib/ddns && \
