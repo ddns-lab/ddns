@@ -205,6 +205,7 @@ pub trait StateStore: Send + Sync {
 }
 
 /// Helper trait for constructing state stores from configuration
+#[async_trait]
 pub trait StateStoreFactory: Send + Sync {
     /// Create a StateStore instance from configuration
     ///
@@ -215,5 +216,5 @@ pub trait StateStoreFactory: Send + Sync {
     /// # Returns
     ///
     /// A boxed StateStore trait object
-    fn create(&self, config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error>;
+    async fn create(&self, config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error>;
 }

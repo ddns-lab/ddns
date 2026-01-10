@@ -62,7 +62,7 @@ pub struct ProviderRegistry {
     ip_sources: RwLock<HashMap<String, Box<dyn IpSourceFactory>>>,
 
     /// Registered state store factories
-    state_stores: RwLock<HashMap<String, Box<dyn StateStoreFactory>>>,
+    state_stores: RwLock<HashMap<String, std::sync::Arc<dyn StateStoreFactory>>>,
 }
 
 impl ProviderRegistry {
@@ -121,7 +121,7 @@ impl ProviderRegistry {
     ) {
         let name = name.into();
         let mut stores = self.state_stores.write().unwrap();
-        stores.insert(name, factory);
+        stores.insert(name, std::sync::Arc::from(factory));
     }
 
     /// Create a DNS provider from configuration
@@ -198,7 +198,7 @@ impl ProviderRegistry {
     ///
     /// - `Ok(Box<dyn StateStore>)`: Created state store instance
     /// - `Err(Error)`: If store type is not registered or creation fails
-    pub fn create_state_store(
+    pub async fn create_state_store(
         &self,
         config: &crate::config::StateStoreConfig,
     ) -> Result<Box<dyn StateStore>> {
@@ -212,9 +212,16 @@ impl ProviderRegistry {
 
         let factory = stores
             .get(store_type)
-            .ok_or_else(|| Error::config(format!("Unknown state store type: {}", store_type)))?;
+            .ok_or_else(|| Error::config(format!("Unknown state store type: {}", store_type)))?
+            .clone();
 
-        factory.create(&serde_json::to_value(config)?)
+        // Create the state store config JSON
+        let config_json = serde_json::to_value(config)?;
+
+        // Release the lock before calling async create
+        drop(stores);
+
+        factory.create(&config_json).await
     }
 
     /// List all registered provider types

@@ -556,7 +556,7 @@ async fn run_daemon(config: Config) -> Result<()> {
     // Create components from registry
     let ip_source = registry.create_ip_source(&ddns_config.ip_source)?;
     let provider = registry.create_provider(&ddns_config.provider)?;
-    let state_store = registry.create_state_store(&ddns_config.state_store)?;
+    let state_store = registry.create_state_store(&ddns_config.state_store).await?;
 
     info!("IP source type: {}", config.ip_source_type);
     info!("Provider type: {}", config.provider_type);

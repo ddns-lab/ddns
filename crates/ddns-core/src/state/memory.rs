@@ -194,8 +194,9 @@ mod tests {
 /// Factory for creating memory state stores
 pub struct MemoryStateStoreFactory;
 
+#[async_trait]
 impl StateStoreFactory for MemoryStateStoreFactory {
-    fn create(&self, _config: &serde_json::Value) -> std::result::Result<Box<dyn StateStore>, Error> {
+    async fn create(&self, _config: &serde_json::Value) -> std::result::Result<Box<dyn StateStore>, Error> {
         Ok(Box::new(MemoryStateStore::new()))
     }
 }

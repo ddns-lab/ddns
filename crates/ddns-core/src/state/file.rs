@@ -505,25 +505,20 @@ mod tests {
 /// Factory for creating file state stores
 pub struct FileStateStoreFactory;
 
+#[async_trait]
 impl StateStoreFactory for FileStateStoreFactory {
-    fn create(&self, config: &serde_json::Value) -> std::result::Result<Box<dyn StateStore>, Error> {
+    async fn create(&self, config: &serde_json::Value) -> std::result::Result<Box<dyn StateStore>, Error> {
         // Try to parse as StateStoreConfig
         if let Ok(state_store_config) = serde_json::from_value::<crate::config::StateStoreConfig>(config.clone()) {
             if let crate::config::StateStoreConfig::File { path } = state_store_config {
-                let rt = tokio::runtime::Runtime::new().map_err(|e| Error::state_store(format!("Failed to create runtime: {}", e)))?;
-                let store = rt.block_on(async {
-                    FileStateStore::new(path).await
-                })?;
+                let store = FileStateStore::new(path).await?;
                 return Ok(Box::new(store));
             }
         }
 
         // Try to extract path directly
         if let Some(path_str) = config.get("path").and_then(|v| v.as_str()) {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| Error::state_store(format!("Failed to create runtime: {}", e)))?;
-            let store = rt.block_on(async {
-                FileStateStore::new(path_str.to_string()).await
-            })?;
+            let store = FileStateStore::new(path_str.to_string()).await?;
             return Ok(Box::new(store));
         }
 
