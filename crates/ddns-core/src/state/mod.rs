@@ -6,5 +6,5 @@
 pub mod file;
 pub mod memory;
 
-pub use file::FileStateStore;
-pub use memory::MemoryStateStore;
+pub use file::{FileStateStore, FileStateStoreFactory};
+pub use memory::{MemoryStateStore, MemoryStateStoreFactory};

@@ -469,6 +469,13 @@ async fn run_daemon(config: Config) -> Result<()> {
         ddns_ip_http::register(&registry);
     }
 
+    // Register built-in state stores
+    info!("Registering file state store");
+    registry.register_state_store("file", Box::new(ddns_core::FileStateStoreFactory));
+
+    info!("Registering memory state store");
+    registry.register_state_store("memory", Box::new(ddns_core::MemoryStateStoreFactory));
+
     // Create IP source config
     let ip_source_config = match config.ip_source_type.as_str() {
         "netlink" => IpSourceConfig::Netlink {

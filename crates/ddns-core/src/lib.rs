@@ -39,5 +39,5 @@ pub use config::{DdnsConfig, IpSourceConfig, ProviderConfig};
 pub use engine::DdnsEngine;
 pub use error::{Error, Result};
 pub use registry::ProviderRegistry;
-pub use state::{FileStateStore, MemoryStateStore};
-pub use traits::{DnsProvider, IpSource, StateStore};
+pub use state::{FileStateStore, FileStateStoreFactory, MemoryStateStore, MemoryStateStoreFactory};
+pub use traits::{DnsProvider, IpSource, StateRecord, StateStore, StateStoreFactory};

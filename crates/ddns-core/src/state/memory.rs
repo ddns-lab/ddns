@@ -27,7 +27,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::Error;
-use crate::traits::state_store::{StateRecord, StateStore};
+use crate::traits::{StateRecord, StateStore, StateStoreFactory};
 
 /// In-memory state store implementation
 ///
@@ -188,5 +188,14 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert!(records.contains(&"example.com".to_string()));
         assert!(records.contains(&"test.com".to_string()));
+    }
+}
+
+/// Factory for creating memory state stores
+pub struct MemoryStateStoreFactory;
+
+impl StateStoreFactory for MemoryStateStoreFactory {
+    fn create(&self, _config: &serde_json::Value) -> std::result::Result<Box<dyn StateStore>, Error> {
+        Ok(Box::new(MemoryStateStore::new()))
     }
 }
