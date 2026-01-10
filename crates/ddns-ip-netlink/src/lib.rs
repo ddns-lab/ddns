@@ -53,12 +53,6 @@ pub struct NetlinkIpSource {
     /// IP version to monitor
     version: Option<ConfigIpVersion>,
 
-    /// Current IP address (cached)
-    current_ip: Option<IpAddr>,
-
-    /// Last event timestamp (for debouncing)
-    last_event: Instant,
-
     /// Debounce window
     debounce_duration: Duration,
 }
@@ -70,8 +64,6 @@ impl NetlinkIpSource {
         Self {
             interface,
             version,
-            current_ip: None,
-            last_event: Instant::now() - Duration::from_secs(60),
             debounce_duration: Duration::from_millis(DEFAULT_DEBOUNCE_MS),
         }
     }
@@ -85,8 +77,6 @@ impl NetlinkIpSource {
         Self {
             interface,
             version,
-            current_ip: None,
-            last_event: Instant::now() - Duration::from_secs(60),
             debounce_duration,
         }
     }
@@ -167,8 +157,6 @@ impl NetlinkIpSource {
 
     /// Query IPv4 addresses using ioctl
     fn query_ipv4_addresses(&self, addresses: &mut Vec<IpAddr>) {
-        use std::ffi::CString;
-
         unsafe {
             // For each interface, get IPv4 addresses using ioctl
             let interfaces_to_check: Vec<String> = if let Some(ref iface) = self.interface {
