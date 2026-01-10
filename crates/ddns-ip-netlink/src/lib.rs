@@ -216,7 +216,7 @@ impl NetlinkIpSource {
             };
 
             for iface_name in interfaces_to_check {
-                let c_name = match CString::new(iface_name) {
+                let c_name = match CString::new(iface_name.as_str()) {
                     Ok(name) => name,
                     Err(_) => continue,
                 };
@@ -297,8 +297,8 @@ impl IpSource for NetlinkIpSource {
         use netlink_sys::{Socket, SocketAddr};
         use tokio_stream::wrappers::UnboundedReceiverStream;
 
-        let interface = self.interface.clone();
-        let version = self.version;
+        let _interface = self.interface.clone();
+        let _version = self.version;
         let debounce_duration = self.debounce_duration;
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -306,7 +306,7 @@ impl IpSource for NetlinkIpSource {
         std::thread::spawn(move || {
             // Create Netlink socket
             // NETLINK_ROUTE = 0 for routing messages
-            let sock = match Socket::new(libc::NETLINK_ROUTE as isize) {
+            let mut sock = match Socket::new(libc::NETLINK_ROUTE as isize) {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!("Failed to create netlink socket: {}", e);
@@ -341,7 +341,7 @@ impl IpSource for NetlinkIpSource {
 
             tracing::info!("Netlink IP monitoring started");
 
-            let mut last_ip: Option<IpAddr> = None;
+            let _last_ip: Option<IpAddr> = None;
             let mut last_event = Instant::now() - Duration::from_secs(60);
 
             // Receive loop
