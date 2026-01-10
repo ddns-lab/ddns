@@ -125,7 +125,7 @@ impl NetlinkIpSource {
             // Create socket to query interface
             let sock = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
             if sock < 0 {
-                return Err(Error::system("Failed to create socket"));
+                return Err(Error::ip_source("Failed to create socket"));
             }
 
             let ret = libc::ioctl(sock, libc::SIOCGIFINDEX, &ifreq);
@@ -135,7 +135,9 @@ impl NetlinkIpSource {
                 return Err(Error::not_found(&format!("Interface '{}' not found", name)));
             }
 
-            Ok(ifreq.ifr_ifru.ifru_ivalue as u32)
+            // Extract interface index from ifru_ivalue field
+            // Note: The layout of ifr_ifru varies by platform
+            Ok(unsafe { ifreq.ifr_ifru.ifru_ivalue as u32 })
         }
     }
 
@@ -144,7 +146,7 @@ impl NetlinkIpSource {
         use std::fs::read_to_string;
 
         let content = read_to_string("/proc/net/if_inet6")
-            .map_err(|_| Error::system("Failed to read /proc/net/if_inet6"))?;
+            .map_err(|_| Error::ip_source("Failed to read /proc/net/if_inet6"))?;
 
         let mut addresses = Vec::new();
 
@@ -171,7 +173,8 @@ impl NetlinkIpSource {
             if addr_hex.len() == 32 {
                 let mut addr_bytes = [0u8; 16];
                 for (i, chunk) in (0..32).step_by(8).enumerate() {
-                    let byte_val = u32::from_str_radix(&addr_hex[chunk..chunk + 8], 16).unwrap_or(0);
+                    let byte_val =
+                        u32::from_str_radix(&addr_hex[chunk..chunk + 8], 16).unwrap_or(0);
                     addr_bytes[i * 4] = (byte_val >> 24) as u8;
                     addr_bytes[i * 4 + 1] = (byte_val >> 16) as u8;
                     addr_bytes[i * 4 + 2] = (byte_val >> 8) as u8;
@@ -202,8 +205,8 @@ impl NetlinkIpSource {
 
         unsafe {
             // For each interface, get IPv4 addresses using ioctl
-            let interfaces_to_check = if let Some(ref iface) = self.interface {
-                vec![iface.as_str()]
+            let interfaces_to_check: Vec<String> = if let Some(ref iface) = self.interface {
+                vec![iface.clone()]
             } else {
                 // Read all interfaces from /proc/net/dev
                 match self.read_all_interfaces() {
@@ -240,7 +243,7 @@ impl NetlinkIpSource {
                     if addr.sa_family == libc::AF_INET as u16 {
                         let sin = &*(addr as *const libc::sockaddr as *const libc::sockaddr_in);
                         let ip = u32::from_be(sin.sin_addr.s_addr);
-                        let ip_addr = IpAddr::from(ip);
+                        let ip_addr: IpAddr = std::net::Ipv4Addr::from(ip).into();
                         if self.should_accept_ip(&ip_addr) {
                             addresses.push(ip_addr);
                         }
@@ -255,7 +258,7 @@ impl NetlinkIpSource {
         use std::fs::read_to_string;
 
         let content = read_to_string("/proc/net/dev")
-            .map_err(|_| Error::system("Failed to read /proc/net/dev"))?;
+            .map_err(|_| Error::ip_source("Failed to read /proc/net/dev"))?;
 
         let mut interfaces = Vec::new();
 
@@ -338,7 +341,7 @@ impl IpSource for NetlinkIpSource {
 
             tracing::info!("Netlink IP monitoring started");
 
-            let mut last_ip = None;
+            let mut last_ip: Option<IpAddr> = None;
             let mut last_event = Instant::now() - Duration::from_secs(60);
 
             // Receive loop
@@ -374,7 +377,9 @@ impl IpSource for NetlinkIpSource {
 
                                     // TODO: Parse netlink message to extract actual IP
                                     // For now, just log the event
-                                    tracing::info!("Address change detected (parsing not yet implemented)");
+                                    tracing::info!(
+                                        "Address change detected (parsing not yet implemented)"
+                                    );
 
                                     last_event = now;
                                 }
