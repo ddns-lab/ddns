@@ -19,10 +19,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: ddnsd
             asset_name: ddnsd-linux-amd64
-          - os: ubuntu-24.04-arm64
-            target: aarch64-unknown-linux-gnu
-            artifact_name: ddnsd
-            asset_name: ddnsd-linux-arm64
+          # ARM64 temporarily disabled due to runner availability issues
+          # Will be added back in future release
+          # - os: ubuntu-24.04-arm64
+          #   target: aarch64-unknown-linux-gnu
+          #   artifact_name: ddnsd
+          #   asset_name: ddnsd-linux-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +103,6 @@ jobs:
         with:
           files: |
             artifacts/ddnsd-linux-amd64/ddnsd-linux-amd64.tar.gz
-            artifacts/ddnsd-linux-arm64/ddnsd-linux-arm64.tar.gz
             checksums.txt
             ddns-${{ github.ref_name }}.tar.gz
           generate_release_notes: true
@@ -113,8 +114,10 @@ jobs:
             ### Binary Downloads
 
             - **Linux AMD64**: `ddnsd-linux-amd64.tar.gz` - For x86_64 systems
-            - **Linux ARM64**: `ddnsd-linux-arm64.tar.gz` - for ARM64/aarch64 systems
             - **Source**: `ddns-${{ github.ref_name }}.tar.gz` - Source code tarball
+
+            > **Note**: ARM64 build will be added in a future release.
+            > For now, you can build from source on ARM64 systems.
 
             ### Installation
 
