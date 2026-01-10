@@ -23,8 +23,10 @@ RUN apk add --no-cache \
     musl-dev \
     pkgconfig \
     openssl-dev \
-    # For netlink support (Linux)
-    libnetfilter_queue-dev
+    openssl-libs \
+    static \
+    # For netlink support (Linux) - not needed for Docker builds
+    # libnetfilter_queue-dev
 
 WORKDIR /build
 
