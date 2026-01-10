@@ -306,7 +306,6 @@ impl IpSource for NetlinkIpSource {
     }
 
     fn watch(&self) -> Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>> {
-        use libc::{SO_RCVBUF, SOL_SOCKET, c_int, socklen_t};
         use netlink_sys::{Socket, SocketAddr};
         use tokio_stream::{StreamExt, wrappers::UnboundedReceiverStream};
 
@@ -333,10 +332,10 @@ impl IpSource for NetlinkIpSource {
             unsafe {
                 libc::setsockopt(
                     fd,
-                    SOL_SOCKET,
-                    SO_RCVBUF,
+                    libc::SOL_SOCKET,
+                    libc::SO_RCVBUF,
                     &bufsize as *const i32 as *const libc::c_void,
-                    std::mem::size_of::<i32>() as socklen_t,
+                    std::mem::size_of::<i32>() as libc::socklen_t,
                 );
             }
 
