@@ -82,7 +82,6 @@
 use anyhow::Result;
 use std::env;
 use std::process::ExitCode;
-use std::time::Duration;
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
@@ -730,77 +729,51 @@ async fn run_daemon(config: Config) -> Result<()> {
     info!("Daemon initialized successfully");
     info!("Ready to monitor IP changes");
 
-    // Wait for shutdown signal with timeout
-    let shutdown_result = wait_for_shutdown_with_timeout(Duration::from_secs(30)).await;
+    // Wait for shutdown signal (runs indefinitely until SIGTERM/SIGINT)
+    let signal = wait_for_shutdown().await?;
 
-    match shutdown_result {
-        Ok(signal) => {
-            info!("Received shutdown signal: {}", signal);
-            info!("Shutting down daemon");
+    info!("Received shutdown signal: {}", signal);
+    info!("Shutting down daemon");
 
-            // Drop engine handle to trigger graceful shutdown
-            drop(engine_handle);
+    // Drop engine handle to trigger graceful shutdown
+    drop(engine_handle);
 
-            // Wait for event listener to finish
-            drop(event_listener);
-        }
-        Err(e) => {
-            error!("Shutdown error: {}", e);
-            return Err(e);
-        }
-    }
+    // Wait for event listener to finish
+    drop(event_listener);
 
     Ok(())
 }
 
-/// Wait for shutdown signals (SIGTERM, SIGINT) with a timeout
+/// Wait for shutdown signals (SIGTERM, SIGINT)
 ///
-/// This function handles graceful shutdown with a timeout to prevent
-/// the daemon from hanging indefinitely during shutdown.
+/// This function waits indefinitely for a shutdown signal.
+/// It will block until either SIGTERM or SIGINT is received.
 ///
 /// # Returns
 ///
-/// Returns the name of the signal received, or an error if timeout occurs.
+/// Returns the name of the signal received.
 #[cfg(unix)]
-async fn wait_for_shutdown_with_timeout(timeout_duration: Duration) -> Result<&'static str> {
-    use tokio::time::timeout;
-
+async fn wait_for_shutdown() -> Result<&'static str> {
     // Set up signal handlers for SIGTERM and SIGINT
     let mut sigterm = signal(SignalKind::terminate())
         .map_err(|e| anyhow::anyhow!("Failed to setup SIGTERM handler: {}", e))?;
     let mut sigint = signal(SignalKind::interrupt())
         .map_err(|e| anyhow::anyhow!("Failed to setup SIGINT handler: {}", e))?;
 
-    // Wait for either signal with timeout
-    match timeout(timeout_duration, async {
-        tokio::select! {
-            _ = sigterm.recv() => "SIGTERM",
-            _ = sigint.recv() => "SIGINT",
-        }
-    })
-    .await
-    {
-        Ok(signal) => Ok(signal),
-        Err(_) => Err(anyhow::anyhow!(
-            "Shutdown timeout after {:?}",
-            timeout_duration
-        )),
+    // Wait for either signal (indefinitely)
+    tokio::select! {
+        _ = sigterm.recv() => Ok("SIGTERM"),
+        _ = sigint.recv() => Ok("SIGINT"),
     }
 }
 
-/// Wait for shutdown signals (SIGINT only) with a timeout
+/// Wait for shutdown signals (SIGINT only)
 ///
 /// Fallback implementation for non-Unix platforms.
 #[cfg(not(unix))]
-async fn wait_for_shutdown_with_timeout(timeout_duration: Duration) -> Result<&'static str> {
-    use tokio::time::timeout;
-
-    match timeout(timeout_duration, tokio::signal::ctrl_c()).await {
-        Ok(Ok(())) => Ok("SIGINT"),
-        Ok(Err(e)) => Err(anyhow::anyhow!("Failed to wait for CTRL-C: {}", e)),
-        Err(_) => Err(anyhow::anyhow!(
-            "Shutdown timeout after {:?}",
-            timeout_duration
-        )),
-    }
+async fn wait_for_shutdown() -> Result<&'static str> {
+    tokio::signal::ctrl_c()
+        .await
+        .map(|()| "SIGINT")
+        .map_err(|e| anyhow::anyhow!("Failed to wait for CTRL-C: {}", e))
 }
