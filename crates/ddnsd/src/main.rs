@@ -113,9 +113,19 @@ impl From<DdnsExitCode> for ExitCode {
     }
 }
 
+/// Get version from git tag or Cargo.toml
+///
+/// Priority:
+/// 1. GIT_VERSION (set by build.rs from git describe)
+/// 2. CARGO_PKG_VERSION (fallback from Cargo.toml)
+fn get_version() -> &'static str {
+    // Use git version if available (set by build.rs), otherwise use Cargo version
+    option_env!("GIT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
 /// Print help message
 fn print_help() {
-    println!("ddnsd {} - Dynamic DNS Daemon\n", env!("CARGO_PKG_VERSION"));
+    println!("ddnsd {} - Dynamic DNS Daemon\n", get_version());
     println!("USAGE:");
     println!("  ddnsd                    Run the daemon (configure via env vars)");
     println!("  ddnsd --version          Show version information");
@@ -459,7 +469,7 @@ fn main() -> ExitCode {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("ddnsd {}", env!("CARGO_PKG_VERSION"));
+                println!("ddnsd {}", get_version());
                 return DdnsExitCode::CleanShutdown.into();
             }
             "--help" | "-h" => {
