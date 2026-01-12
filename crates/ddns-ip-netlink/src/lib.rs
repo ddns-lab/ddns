@@ -98,6 +98,38 @@ impl NetlinkIpSource {
         }
     }
 
+    /// Check if an IP address is a public (routable) address
+    fn is_public_ip(&self, ip: &IpAddr) -> bool {
+        match ip {
+            IpAddr::V4(ipv4) => {
+                let octets = ipv4.octets();
+                // Private IPv4 ranges:
+                // 10.0.0.0/8 (10.0.0.0 - 10.255.255.255)
+                // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+                // 192.168.0.0/16 (192.168.0.0 - 192.168.255.255)
+                // 169.254.0.0/16 (link-local)
+                // 127.0.0.0/8 (loopback, already filtered)
+                !(octets[0] == 10
+                    || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                    || (octets[0] == 192 && octets[1] == 168)
+                    || (octets[0] == 169 && octets[1] == 254)
+                    || octets[0] == 127)
+            }
+            IpAddr::V6(ipv6) => {
+                let segments = ipv6.segments();
+                // Private IPv6 ranges:
+                // fc00::/7 (Unique Local Address - ULA)
+                // fe80::/10 (link-local)
+                // ff00::/8 (multicast)
+                // ::1 (loopback, already filtered)
+                // :: (unspecified, already filtered)
+                !(segments[0] & 0xfe00 == 0xfc00
+                    || (segments[0] & 0xffc0 == 0xfe80)
+                    || (segments[0] & 0xff00 == 0xff00))
+            }
+        }
+    }
+
     /// Query current IP addresses by reading from /proc/net/if_inet6
     fn query_addresses_proc(&self) -> Result<Vec<IpAddr>> {
         use std::fs::read_to_string;
@@ -232,14 +264,36 @@ impl IpSource for NetlinkIpSource {
     async fn current(&self) -> Result<IpAddr> {
         let addresses = self.query_addresses_proc()?;
 
-        // Prefer IPv4 over IPv6 if both are available
-        let addr = addresses
-            .iter()
-            .find(|ip| ip.is_ipv4())
-            .or_else(|| addresses.first())
-            .ok_or_else(|| Error::not_found("No IP addresses found"))?;
+        // Select IP based on version configuration
+        let selected = match self.version {
+            Some(ConfigIpVersion::V4) => {
+                // IPv4 only: prefer public IP, fall back to any IPv4
+                addresses
+                    .iter()
+                    .find(|ip| ip.is_ipv4() && self.is_public_ip(ip))
+                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv4()))
+            }
+            Some(ConfigIpVersion::V6) => {
+                // IPv6 only: prefer public IP, fall back to any IPv6
+                addresses
+                    .iter()
+                    .find(|ip| ip.is_ipv6() && self.is_public_ip(ip))
+                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv6()))
+            }
+            Some(ConfigIpVersion::Both) | None => {
+                // Both versions: prefer public IPv4, then public IPv6, then any
+                addresses
+                    .iter()
+                    .find(|ip| ip.is_ipv4() && self.is_public_ip(ip))
+                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv6() && self.is_public_ip(ip)))
+                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv4()))
+                    .or_else(|| addresses.first())
+            }
+        };
 
-        Ok(*addr)
+        selected
+            .map(|&ip| ip)
+            .ok_or_else(|| Error::not_found("No suitable IP addresses found"))
     }
 
     fn watch(&self) -> Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>> {

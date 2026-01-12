@@ -218,6 +218,7 @@ DDNS_IP_SOURCE_TYPE=netlink
 # DDNS_IP_SOURCE_INTERFACE=eth0
 # DDNS_IP_SOURCE_URL=https://icanhazip.com
 # DDNS_IP_SOURCE_INTERVAL=300
+# DDNS_IP_SOURCE_VERSION=v6  # Options: v4, v6, both (default: both)
 
 # DNS Provider Configuration
 DDNS_PROVIDER_TYPE=cloudflare

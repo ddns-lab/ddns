@@ -24,6 +24,7 @@
 // - `DDNS_IP_SOURCE_INTERFACE`: Network interface (for netlink)
 // - `DDNS_IP_SOURCE_URL`: URL to fetch IP from (for http)
 // - `DDNS_IP_SOURCE_INTERVAL`: Poll interval in seconds (for http)
+// - `DDNS_IP_SOURCE_VERSION`: IP version to monitor (v4, v6, both) [optional]
 //
 // ### DNS Provider
 // - `DDNS_PROVIDER_TYPE`: Provider type (cloudflare)
@@ -46,6 +47,7 @@
 // ```bash
 // export DDNS_IP_SOURCE_TYPE=netlink
 // export DDNS_IP_SOURCE_INTERFACE=eth0
+// export DDNS_IP_SOURCE_VERSION=v6  # Optional: v4, v6, or both (default: both)
 // export DDNS_PROVIDER_TYPE=cloudflare
 // export DDNS_PROVIDER_API_TOKEN=your_token
 // export DDNS_RECORDS=example.com,www.example.com
@@ -61,6 +63,8 @@ use std::process::ExitCode;
 use std::time::Duration;
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
+
+use ddns_core::config::IpVersion;
 
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
@@ -94,6 +98,7 @@ struct Config {
     ip_source_interface: Option<String>,
     ip_source_url: Option<String>,
     ip_source_interval: Option<u64>,
+    ip_source_version: Option<String>,
     provider_type: String,
     provider_api_token: String,
     provider_zone_id: Option<String>,
@@ -118,6 +123,7 @@ impl Config {
             ip_source_interval: env::var("DDNS_IP_SOURCE_INTERVAL")
                 .ok()
                 .map(|s| s.parse().unwrap_or(60)),
+            ip_source_version: env::var("DDNS_IP_SOURCE_VERSION").ok(),
             provider_type: env::var("DDNS_PROVIDER_TYPE")
                 .unwrap_or_else(|_| "cloudflare".to_string()),
             provider_api_token: env::var("DDNS_PROVIDER_API_TOKEN")?,
@@ -488,10 +494,25 @@ async fn run_daemon(config: Config) -> Result<()> {
     // - Non-Linux platforms (macOS, Windows, BSD)
     // - CI/CD testing environments
     // - Debugging and validation
+
+    // Parse IP version configuration
+    let ip_version = match config.ip_source_version.as_deref() {
+        Some("v4") => Some(IpVersion::V4),
+        Some("v6") => Some(IpVersion::V6),
+        Some("both") => Some(IpVersion::Both),
+        Some(value) => {
+            return Err(anyhow::anyhow!(
+                "Invalid DDNS_IP_SOURCE_VERSION '{}'. Valid values: v4, v6, both",
+                value
+            ));
+        }
+        None => None,
+    };
+
     let ip_source_config = match config.ip_source_type.as_str() {
         "netlink" => IpSourceConfig::Netlink {
             interface: config.ip_source_interface.clone(),
-            version: None,
+            version: ip_version,
         },
         "http" => IpSourceConfig::Http {
             url: config
