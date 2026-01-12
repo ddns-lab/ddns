@@ -8,8 +8,7 @@ fn main() {
         .output()
     {
         Ok(output) => {
-            let version = String::from_utf8(output.stdout)
-                .unwrap_or_else(|_| "0.1.0".to_string());
+            let version = String::from_utf8(output.stdout).unwrap_or_else(|_| "0.1.0".to_string());
 
             // Remove 'v' prefix if present
             version.strip_prefix('v').unwrap_or(&version).to_string()

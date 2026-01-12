@@ -507,9 +507,14 @@ pub struct FileStateStoreFactory;
 
 #[async_trait]
 impl StateStoreFactory for FileStateStoreFactory {
-    async fn create(&self, config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error> {
+    async fn create(
+        &self,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn StateStore>, crate::Error> {
         // Try to parse as StateStoreConfig
-        if let Ok(state_store_config) = serde_json::from_value::<crate::config::StateStoreConfig>(config.clone()) {
+        if let Ok(state_store_config) =
+            serde_json::from_value::<crate::config::StateStoreConfig>(config.clone())
+        {
             if let crate::config::StateStoreConfig::File { path } = state_store_config {
                 let store = FileStateStore::new(path).await?;
                 return Ok(Box::new(store));

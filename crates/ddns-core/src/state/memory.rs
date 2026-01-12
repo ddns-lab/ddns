@@ -196,7 +196,10 @@ pub struct MemoryStateStoreFactory;
 
 #[async_trait]
 impl StateStoreFactory for MemoryStateStoreFactory {
-    async fn create(&self, _config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error> {
+    async fn create(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Box<dyn StateStore>, crate::Error> {
         Ok(Box::new(MemoryStateStore::new()))
     }
 }

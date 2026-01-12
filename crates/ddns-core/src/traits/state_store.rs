@@ -216,5 +216,6 @@ pub trait StateStoreFactory: Send + Sync {
     /// # Returns
     ///
     /// A boxed StateStore trait object
-    async fn create(&self, config: &serde_json::Value) -> Result<Box<dyn StateStore>, crate::Error>;
+    async fn create(&self, config: &serde_json::Value)
+    -> Result<Box<dyn StateStore>, crate::Error>;
 }

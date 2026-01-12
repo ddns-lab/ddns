@@ -89,10 +89,10 @@ const DEFAULT_POLL_INTERVAL_SECS: u64 = 60;
 /// - Set via: DDNS_IP_SOURCE_URL=https://checkip.amazonaws.com
 #[allow(dead_code)]
 const DEFAULT_IP_SERVICES: &[&str] = &[
-    "https://icanhazip.com",          // Dual-stack: Auto IPv4/IPv6 (DEFAULT)
-    "https://api64.ipify.org",        // Open-source: IPv4/IPv6 dual-stack
-    "https://checkip.amazonaws.com",  // AWS: IPv4-only, reliable
-    "https://ifconfig.me/ip",         // Legacy: IPv4/IPv6, may return IPv6
+    "https://icanhazip.com",         // Dual-stack: Auto IPv4/IPv6 (DEFAULT)
+    "https://api64.ipify.org",       // Open-source: IPv4/IPv6 dual-stack
+    "https://checkip.amazonaws.com", // AWS: IPv4-only, reliable
+    "https://ifconfig.me/ip",        // Legacy: IPv4/IPv6, may return IPv6
 ];
 
 /// HTTP-based IP source (fallback for non-Linux or CI)
