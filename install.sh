@@ -42,21 +42,21 @@ NONINTERACTIVE="${DDNS_NONINTERACTIVE:-false}"
 ARCH="$(uname -m)"
 OS="$(uname -s)"
 
-# Logging functions
+# Logging functions (use printf for portability)
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf '%b' "${BLUE}[INFO]${NC} $1\n" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf '%b' "${GREEN}[SUCCESS]${NC} $1\n" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    printf '%b' "${YELLOW}[WARN]${NC} $1\n" >&2
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf '%b' "${RED}[ERROR]${NC} $1\n" >&2
 }
 
 # Print header
