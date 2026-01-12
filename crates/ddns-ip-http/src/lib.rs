@@ -4,21 +4,30 @@
 //
 // ## Purpose
 //
-// This is a **fallback IP source** for:
+// This is an **alternative IP source** for:
 // - Non-Linux platforms (macOS, Windows, BSD)
 // - CI/CD testing
 // - Debugging and validation
 //
-// ## IMPORTANT: Not Primary on Linux
+// ## IMPORTANT: Exclusive Selection, Not Fallback
+//
+// Per AI_CONTRACT.md §2.2, IP source selection is **exclusive**, not fallback-based:
+// - If `DDNS_IP_SOURCE_TYPE=netlink`, ONLY netlink is used
+// - If `DDNS_IP_SOURCE_TYPE=http`, ONLY HTTP polling is used
+// - There is NO automatic fallback between sources
 //
 // On Linux, **always prefer Netlink** (ddns-ip-netlink) over HTTP.
-// This source is documented as non-primary and should only be used
-// when Netlink is unavailable.
+// Netlink provides event-driven, zero-polling IP monitoring via Linux kernel.
+// This source should only be used when Netlink is unavailable (non-Linux systems).
 //
 // ## Architecture
 //
-// Fetches current IP from external services (e.g., ifconfig.me, icanhazip.com)
-// and polls at a configurable interval for changes.
+// Fetches current IP from external services and polls at a configurable interval.
+//
+// Default IP services (ordered by preference):
+// 1. https://checkip.amazonaws.com - AWS provided, most reliable
+// 2. https://icanhazip.com - Simple, reliable, no rate limit
+// 3. https://ifconfig.me/ip - Legacy service, generally available
 
 use ddns_core::ProviderRegistry;
 use ddns_core::config::IpSourceConfig;
@@ -39,11 +48,16 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 60;
 
 /// Default IP check services (for future failover support)
+///
+/// Services ordered by preference:
+/// 1. checkip.amazonaws.com - AWS provided, most reliable
+/// 2. icanhazip.com - Simple, reliable, no rate limit
+/// 3. ifconfig.me/ip - Legacy service, generally available
 #[allow(dead_code)]
 const DEFAULT_IP_SERVICES: &[&str] = &[
-    "https://api.ipify.org",  // 43KB/day free, returns plain text IP
-    "https://ifconfig.me/ip", // No rate limit documented
-    "https://icanhazip.com",  // No rate limit documented
+    "https://checkip.amazonaws.com",  // AWS provided, most reliable
+    "https://icanhazip.com",          // Simple, reliable, no rate limit
+    "https://ifconfig.me/ip",         // Legacy service, generally available
 ];
 
 /// HTTP-based IP source (fallback for non-Linux or CI)
@@ -305,7 +319,7 @@ mod tests {
         let factory = HttpFactory;
 
         let config = IpSourceConfig::Http {
-            url: "https://api.ipify.org".to_string(),
+            url: "https://checkip.amazonaws.com".to_string(),
             interval_secs: 60,
         };
 

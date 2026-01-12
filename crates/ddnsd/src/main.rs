@@ -477,6 +477,17 @@ async fn run_daemon(config: Config) -> Result<()> {
     registry.register_state_store("memory", Box::new(ddns_core::MemoryStateStoreFactory));
 
     // Create IP source config
+    //
+    // IMPORTANT: IP source selection is EXCLUSIVE, not fallback-based.
+    // - If DDNS_IP_SOURCE_TYPE=netlink, ONLY netlink is used (Linux kernel events)
+    // - If DDNS_IP_SOURCE_TYPE=http, ONLY HTTP polling is used
+    // - There is NO automatic fallback between sources (per AI_CONTRACT.md §2.2)
+    //
+    // On Linux, ALWAYS prefer netlink for event-driven IP monitoring.
+    // HTTP is only for:
+    // - Non-Linux platforms (macOS, Windows, BSD)
+    // - CI/CD testing environments
+    // - Debugging and validation
     let ip_source_config = match config.ip_source_type.as_str() {
         "netlink" => IpSourceConfig::Netlink {
             interface: config.ip_source_interface.clone(),
@@ -485,7 +496,7 @@ async fn run_daemon(config: Config) -> Result<()> {
         "http" => IpSourceConfig::Http {
             url: config
                 .ip_source_url
-                .unwrap_or_else(|| "https://api.ipify.org".to_string()),
+                .unwrap_or_else(|| "https://checkip.amazonaws.com".to_string()),
             interval_secs: config.ip_source_interval.unwrap_or(60),
         },
         _ => {
