@@ -108,52 +108,6 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
-          body: |
-            ## ddns ${{ github.ref_name }}
-
-            ### Binary Downloads
-
-            - **Linux AMD64**: `ddnsd-linux-amd64.tar.gz` - For x86_64 systems
-            - **Source**: `ddns-${{ github.ref_name }}.tar.gz` - Source code tarball
-
-            > **Note**: ARM64 build will be added in a future release.
-            > For now, you can build from source on ARM64 systems.
-
-            ### Installation
-
-            ```bash
-            # Download and extract
-            wget https://github.com/ddns-lab/ddns/releases/download/${{ github.ref_name }}/ddnsd-linux-amd64.tar.gz
-            tar xzf ddnsd-linux-amd64.tar.gz
-
-            # Install
-            sudo install -m 755 ddnsd /usr/local/bin/ddnsd
-
-            # Configure with environment variables
-            export DDNS_PROVIDER_TYPE=cloudflare
-            export DDNS_PROVIDER_API_TOKEN=your_token
-            export DDNS_RECORDS=example.com
-
-            # Run
-            ddnsd
-            ```
-
-            ### Verification
-
-            Verify the checksums:
-            ```bash
-            sha256sum -c checksums.txt
-            ```
-
-            ### What's Included
-
-            - ✅ Production-ready Cloudflare DNS provider
-            - ✅ Event-driven architecture
-            - ✅ Dry-run mode for safe testing
-            - ✅ Comprehensive error handling
-            - ✅ Security-first design
-
-            See [README.md](https://github.com/ddns-lab/ddns/blob/main/README.md) for details.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

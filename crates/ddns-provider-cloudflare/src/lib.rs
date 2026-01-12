@@ -434,6 +434,144 @@ impl CloudflareProvider {
         tracing::debug!("Found record ID: {}", record_id);
         Ok(record_id.to_string())
     }
+
+    /// Create a new DNS record
+    ///
+    /// # Parameters
+    ///
+    /// - `zone_id`: The zone ID
+    /// - `record_name`: The DNS record name (e.g., "example.com")
+    /// - `record_type`: The DNS record type (A or AAAA)
+    /// - `ip`: The IP address for the record
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(String)`: The created record ID
+    /// - `Err(Error)`: If creation fails
+    ///
+    /// # API Call
+    ///
+    /// ```http
+    /// POST /zones/:zone_id/dns_records
+    /// Authorization: Bearer <token>
+    /// Content-Type: application/json
+    ///
+    /// {
+    ///   "type": "A" or "AAAA",
+    ///   "name": "example.com",
+    ///   "content": "1.2.3.4",
+    ///   "ttl": 1,
+    ///   "proxied": false
+    /// }
+    /// ```
+    async fn create_record(
+        &self,
+        zone_id: &str,
+        record_name: &str,
+        record_type: &str,
+        ip: IpAddr,
+    ) -> Result<String> {
+        tracing::info!(
+            "Creating DNS record: {} ({}) -> {}",
+            record_name,
+            record_type,
+            ip
+        );
+
+        let url = format!("{}/zones/{}/dns_records", CLOUDFLARE_API_BASE, zone_id);
+
+        let create_payload = serde_json::json!({
+            "type": record_type,
+            "name": record_name,
+            "content": ip.to_string(),
+            "ttl": 1, // Auto TTL
+            "proxied": false, // DNS only, no Cloudflare proxy
+        });
+
+        // In dry-run mode, log the intended creation and return success
+        if self.dry_run {
+            tracing::info!(
+                "[DRY-RUN] Would send POST request to {} with payload: {}",
+                url,
+                create_payload
+            );
+            // Return a dummy record ID
+            return Ok("dry-run-record-id".to_string());
+        }
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&self.api_token)
+            .header("Content-Type", "application/json")
+            .json(&create_payload)
+            .send()
+            .await
+            .map_err(|e| Error::provider("cloudflare", format!("HTTP request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error response".to_string());
+
+            return match status.as_u16() {
+                401 | 403 => Err(Error::provider(
+                    "cloudflare",
+                    format!(
+                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
+                        status
+                    ),
+                )),
+                409 => Err(Error::provider(
+                    "cloudflare",
+                    format!(
+                        "Conflict: Record already exists or is being created by another process. Status: {}",
+                        status
+                    ),
+                )),
+                429 => Err(Error::provider(
+                    "cloudflare",
+                    format!(
+                        "Rate limit exceeded. Please retry later. Status: {}",
+                        status
+                    ),
+                )),
+                500..=599 => Err(Error::provider(
+                    "cloudflare",
+                    format!(
+                        "Cloudflare server error (transient): {} - {}",
+                        status, error_text
+                    ),
+                )),
+                _ => Err(Error::provider(
+                    "cloudflare",
+                    format!("Failed to create record: {} - {}", status, error_text),
+                )),
+            };
+        }
+
+        let record_json: Value = response.json().await.map_err(|e| {
+            Error::provider("cloudflare", format!("Failed to parse response: {}", e))
+        })?;
+
+        let record_id = record_json["result"]["id"].as_str().ok_or_else(|| {
+            Error::provider(
+                "cloudflare",
+                "Invalid response format: result.id is not a string",
+            )
+        })?;
+
+        tracing::info!(
+            "DNS record created successfully: {} ({}) -> {}",
+            record_name,
+            record_type,
+            ip
+        );
+
+        Ok(record_id.to_string())
+    }
 }
 
 #[async_trait]
@@ -489,10 +627,38 @@ impl DnsProvider for CloudflareProvider {
         // Step 1: Get zone ID
         let zone_id = self.get_zone_id(record_name).await?;
 
-        // Step 2: Get record ID
-        let record_id = self
-            .get_record_id(&zone_id, record_name, record_type)
-            .await?;
+        // Step 2: Get record ID (create if not exists)
+        let (record_id, is_newly_created) =
+            match self.get_record_id(&zone_id, record_name, record_type).await {
+                Ok(id) => (id, false),
+                Err(e) => {
+                    // Check if error is "record not found"
+                    if matches!(&e, Error::NotFound { .. }) {
+                        tracing::info!(
+                            "DNS record does not exist, creating: {} ({})",
+                            record_name,
+                            record_type
+                        );
+                        (
+                            self.create_record(&zone_id, record_name, record_type, new_ip)
+                                .await?,
+                            true,
+                        )
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
+
+        // If record was just created, return Created result
+        if is_newly_created {
+            tracing::info!(
+                "DNS record created successfully: {} -> {}",
+                record_name,
+                new_ip
+            );
+            return Ok(UpdateResult::Created { new_ip });
+        }
 
         // Step 3: Get current record to check if IP matches
         let get_url = format!(
