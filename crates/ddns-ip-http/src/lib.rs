@@ -22,8 +22,16 @@
 //
 // ## IP Service Selection
 //
-// The default service is AWS checkip (most reliable), but users can override via
-// `DDNS_IP_SOURCE_URL` environment variable.
+// The default service is icanhazip.com (dual-stack IPv4/IPv6), but users can
+// override via `DDNS_IP_SOURCE_URL` environment variable.
+//
+// **Default service**: icanhazip.com
+// - Supports both IPv4 and IPv6
+// - Client automatically selects based on network availability
+// - No rate limits, very fast, simple plain text response
+//
+// **IPv4-only alternative**: If you only need IPv4, use checkip.amazonaws.com:
+//   export DDNS_IP_SOURCE_URL=https://checkip.amazonaws.com
 //
 // **Note on ipify**: While ipify.org is an excellent open-source service with
 // no rate limits and no logging, its IPv4 endpoint (api.ipify.org) may be blocked
@@ -34,10 +42,10 @@
 // Fetches current IP from external services and polls at a configurable interval.
 //
 // Available IP services (can be overridden via DDNS_IP_SOURCE_URL):
-// - https://checkip.amazonaws.com - AWS, IPv4-only (default)
-// - https://ifconfig.me/ip - Legacy service, IPv4-only
-// - https://icanhazip.com - IPv4/IPv6, no rate limit
+// - https://icanhazip.com - Dual-stack IPv4/IPv6 (default, recommended)
 // - https://api64.ipify.org - Open-source, IPv4/IPv6 dual-stack
+// - https://checkip.amazonaws.com - AWS, IPv4-only (use if you only need IPv4)
+// - https://ifconfig.me/ip - Legacy service, may return IPv6
 
 use ddns_core::ProviderRegistry;
 use ddns_core::config::IpSourceConfig;
@@ -61,26 +69,30 @@ const DEFAULT_POLL_INTERVAL_SECS: u64 = 60;
 ///
 /// Services ordered by preference and reliability:
 ///
-/// **Recommended (IPv4-only)**:
-/// 1. checkip.amazonaws.com - AWS provided, most reliable, returns IPv4 only
-/// 2. ifconfig.me/ip - Legacy service, generally available, returns IPv4 only
-///
-/// **IPv6-capable**:
-/// 3. icanhazip.com - Supports both IPv4 and IPv6, no rate limit
-/// 4. api64.ipify.org - Excellent open-source service, IPv4/IPv6 dual-stack
+/// **Dual-stack (IPv4 + IPv6)** - RECOMMENDED:
+/// 1. icanhazip.com - Simple, fast, auto-selects IPv4 or IPv6 based on client network
+/// 2. api64.ipify.org - Open-source service, dual-stack, no rate limits
 ///    (Note: api.ipify.org IPv4-only endpoint may be blocked in some regions)
 ///
-/// **Why this order?**
-/// - AWS has best reliability and global CDN
-/// - ifconfig.me is battle-tested since 2007
-/// - icanhazip.com is simple and fast
-/// - ipify is open-source but IPv4 endpoint has regional access issues
+/// **IPv4-only** - Use only if you don't need IPv6:
+/// 3. checkip.amazonaws.com - AWS provided, most reliable for IPv4 only
+/// 4. ifconfig.me/ip - Legacy service, generally available
+///
+/// **Why icanhazip.com as default?**
+/// - Supports both IPv4 and IPv6 automatically
+/// - Client (curl) prefers IPv6 if available, falls back to IPv4
+/// - No rate limits, battle-tested, very fast
+/// - Simple plain text response
+///
+/// **When to use checkip.amazonaws.com?**
+/// - Only if you need IPv4-only address
+/// - Set via: DDNS_IP_SOURCE_URL=https://checkip.amazonaws.com
 #[allow(dead_code)]
 const DEFAULT_IP_SERVICES: &[&str] = &[
-    "https://checkip.amazonaws.com",  // AWS: Most reliable, IPv4-only
-    "https://ifconfig.me/ip",         // Legacy: Battle-tested, IPv4-only
-    "https://icanhazip.com",          // Simple: IPv4/IPv6, no rate limit
-    "https://api64.ipify.org",        // Open-source: IPv4/IPv6 (api.ipify.org may be blocked)
+    "https://icanhazip.com",          // Dual-stack: Auto IPv4/IPv6 (DEFAULT)
+    "https://api64.ipify.org",        // Open-source: IPv4/IPv6 dual-stack
+    "https://checkip.amazonaws.com",  // AWS: IPv4-only, reliable
+    "https://ifconfig.me/ip",         // Legacy: IPv4/IPv6, may return IPv6
 ];
 
 /// HTTP-based IP source (fallback for non-Linux or CI)
@@ -342,7 +354,7 @@ mod tests {
         let factory = HttpFactory;
 
         let config = IpSourceConfig::Http {
-            url: "https://checkip.amazonaws.com".to_string(),
+            url: "https://icanhazip.com".to_string(),
             interval_secs: 60,
         };
 

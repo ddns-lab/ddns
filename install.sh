@@ -216,7 +216,7 @@ create_env_file() {
 # IP Source Configuration
 DDNS_IP_SOURCE_TYPE=netlink
 # DDNS_IP_SOURCE_INTERFACE=eth0
-# DDNS_IP_SOURCE_URL=https://checkip.amazonaws.com
+# DDNS_IP_SOURCE_URL=https://icanhazip.com
 # DDNS_IP_SOURCE_INTERVAL=300
 
 # DNS Provider Configuration

@@ -496,7 +496,7 @@ async fn run_daemon(config: Config) -> Result<()> {
         "http" => IpSourceConfig::Http {
             url: config
                 .ip_source_url
-                .unwrap_or_else(|| "https://checkip.amazonaws.com".to_string()),
+                .unwrap_or_else(|| "https://icanhazip.com".to_string()),
             interval_secs: config.ip_source_interval.unwrap_or(60),
         },
         _ => {
