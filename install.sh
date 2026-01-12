@@ -144,10 +144,10 @@ get_download_url() {
     # Determine architecture
     case "${ARCH}" in
         x86_64|amd64)
-            arch_name="x86_64"
+            arch_name="amd64"
             ;;
         aarch64|arm64)
-            arch_name="aarch64"
+            arch_name="arm64"
             ;;
         armv7l)
             arch_name="armv7"
@@ -158,7 +158,7 @@ get_download_url() {
             ;;
     esac
 
-    echo "${GITHUB_BASE}/${REPO_OWNER}/${REPO_NAME}/releases/download/${version}/ddnsd-${version}-${os_name}-${arch_name}.tar.gz"
+    echo "${GITHUB_BASE}/${REPO_OWNER}/${REPO_NAME}/releases/download/${version}/ddnsd-${os_name}-${arch_name}.tar.gz"
 }
 
 # Download and extract binary
