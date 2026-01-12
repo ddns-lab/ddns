@@ -20,14 +20,24 @@
 // Netlink provides event-driven, zero-polling IP monitoring via Linux kernel.
 // This source should only be used when Netlink is unavailable (non-Linux systems).
 //
+// ## IP Service Selection
+//
+// The default service is AWS checkip (most reliable), but users can override via
+// `DDNS_IP_SOURCE_URL` environment variable.
+//
+// **Note on ipify**: While ipify.org is an excellent open-source service with
+// no rate limits and no logging, its IPv4 endpoint (api.ipify.org) may be blocked
+// in some regions. If you need ipify, use api64.ipify.org (IPv4/IPv6 dual-stack).
+//
 // ## Architecture
 //
 // Fetches current IP from external services and polls at a configurable interval.
 //
-// Default IP services (ordered by preference):
-// 1. https://checkip.amazonaws.com - AWS provided, most reliable
-// 2. https://icanhazip.com - Simple, reliable, no rate limit
-// 3. https://ifconfig.me/ip - Legacy service, generally available
+// Available IP services (can be overridden via DDNS_IP_SOURCE_URL):
+// - https://checkip.amazonaws.com - AWS, IPv4-only (default)
+// - https://ifconfig.me/ip - Legacy service, IPv4-only
+// - https://icanhazip.com - IPv4/IPv6, no rate limit
+// - https://api64.ipify.org - Open-source, IPv4/IPv6 dual-stack
 
 use ddns_core::ProviderRegistry;
 use ddns_core::config::IpSourceConfig;
@@ -49,15 +59,28 @@ const DEFAULT_POLL_INTERVAL_SECS: u64 = 60;
 
 /// Default IP check services (for future failover support)
 ///
-/// Services ordered by preference:
-/// 1. checkip.amazonaws.com - AWS provided, most reliable
-/// 2. icanhazip.com - Simple, reliable, no rate limit
-/// 3. ifconfig.me/ip - Legacy service, generally available
+/// Services ordered by preference and reliability:
+///
+/// **Recommended (IPv4-only)**:
+/// 1. checkip.amazonaws.com - AWS provided, most reliable, returns IPv4 only
+/// 2. ifconfig.me/ip - Legacy service, generally available, returns IPv4 only
+///
+/// **IPv6-capable**:
+/// 3. icanhazip.com - Supports both IPv4 and IPv6, no rate limit
+/// 4. api64.ipify.org - Excellent open-source service, IPv4/IPv6 dual-stack
+///    (Note: api.ipify.org IPv4-only endpoint may be blocked in some regions)
+///
+/// **Why this order?**
+/// - AWS has best reliability and global CDN
+/// - ifconfig.me is battle-tested since 2007
+/// - icanhazip.com is simple and fast
+/// - ipify is open-source but IPv4 endpoint has regional access issues
 #[allow(dead_code)]
 const DEFAULT_IP_SERVICES: &[&str] = &[
-    "https://checkip.amazonaws.com",  // AWS provided, most reliable
-    "https://icanhazip.com",          // Simple, reliable, no rate limit
-    "https://ifconfig.me/ip",         // Legacy service, generally available
+    "https://checkip.amazonaws.com",  // AWS: Most reliable, IPv4-only
+    "https://ifconfig.me/ip",         // Legacy: Battle-tested, IPv4-only
+    "https://icanhazip.com",          // Simple: IPv4/IPv6, no rate limit
+    "https://api64.ipify.org",        // Open-source: IPv4/IPv6 (api.ipify.org may be blocked)
 ];
 
 /// HTTP-based IP source (fallback for non-Linux or CI)
