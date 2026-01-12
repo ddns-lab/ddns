@@ -61,19 +61,17 @@ log_error() {
 
 # Print header
 print_header() {
-    cat << EOF
-
-╔════════════════════════════════════════════════════════════╗
-║                                                              ║
-║      DDNS Daemon - Dynamic DNS Update Daemon                ║
-║                                                              ║
-║                        Version ${VERSION}                      ║
-║                                                              ║
-║      https://github.com/ddns-lab/ddns                       ║
-║                                                              ║
-╚════════════════════════════════════════════════════════════╝
-
-EOF
+    printf '\n'
+    printf '╔════════════════════════════════════════════════════════════╗\n'
+    printf '║                                                            ║\n'
+    printf '║      DDNS Daemon - Dynamic DNS Update Daemon               ║\n'
+    printf '║                                                            ║\n'
+    printf '║                        Version %-21s║\n' "${VERSION}"
+    printf '║                                                            ║\n'
+    printf '║      https://github.com/ddns-lab/ddns                      ║\n'
+    printf '║                                                            ║\n'
+    printf '╚════════════════════════════════════════════════════════════╝\n'
+    printf '\n'
 }
 
 # Detect system and determine installation mode
