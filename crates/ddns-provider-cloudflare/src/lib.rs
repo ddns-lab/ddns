@@ -608,6 +608,7 @@ impl DnsProvider for CloudflareProvider {
         let update_payload = serde_json::json!({
             "content": new_ip.to_string(),
             "type": record_type,
+            "name": record_name,
         });
 
         let put_response = self
