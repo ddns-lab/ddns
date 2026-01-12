@@ -61,16 +61,20 @@ log_error() {
 
 # Print header
 print_header() {
-    cat << "EOF"
-███████╗██╗   ██╗████████╗██╗   ██╗██████╗ ███████╗
-██╔════╝██║   ██║╚══██╔══╝██║   ██║██╔══██╗██╔════╝
-███████╗██║   ██║   ██║   ██║   ██║██████╔╝█████╗
-╚════██║██║   ██║   ██║   ██║   ██║██╔══██╗██╔══╝
-███████║╚██████╔╝   ██║   ╚██████╔╝██║  ██║███████╗
-╚══════╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+    cat << EOF
 
-            Dynamic DNS Daemon v0.1.0
-     https://github.com/ddns-lab/ddns
+╔════════════════════════════════════════════════════════════╗
+║                                                              ║
+║   ███╗   ███╗██╗███╗   ██╗ ██████╗  DDNS Daemon            ║
+║   ████╗ ████║██║████╗  ██║██╔═══██╝                       ║
+║   ██╔████╔██║██║██╔██╗ ██║██║   ██║   ${VERSION}               ║
+║   ██║╚██╔╝██║██║██║╚██╗██║██║   ██║                       ║
+║   ██║ ╚═╝ ██║██║██║ ╚████║╚██████╔╝                        ║
+║   ╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝                         ║
+║                                                              ║
+║   https://github.com/ddns-lab/ddns                          ║
+║                                                              ║
+╚════════════════════════════════════════════════════════════╝
 
 EOF
 }
@@ -451,9 +455,7 @@ install_docker() {
 
 # Main installation flow
 main() {
-    print_header
-
-    # Parse command line arguments
+    # Parse command line arguments first (before print_header)
     while [ $# -gt 0 ]; do
         case "$1" in
             --mode)
@@ -505,6 +507,14 @@ EOF
         esac
     done
 
+    # Get version if "latest" (before print_header so we can show it)
+    if [ "${VERSION}" = "latest" ]; then
+        VERSION=$(get_latest_version) || return 1
+    fi
+
+    # Now print header with correct version
+    print_header
+
     # Auto-detect mode if needed
     if [ "${MODE}" = "auto" ]; then
         MODE=$(detect_mode) || return 1
@@ -512,12 +522,6 @@ EOF
 
     log_info "Installation mode: ${MODE}"
     log_info "Version: ${VERSION}"
-
-    # Get version if "latest"
-    if [ "${VERSION}" = "latest" ]; then
-        VERSION=$(get_latest_version) || return 1
-        log_info "Latest version: ${VERSION}"
-    fi
 
     # Install based on mode
     case "${MODE}" in
