@@ -62,15 +62,15 @@ log_error() {
 # Print header
 print_header() {
     printf '\n'
-    printf '╔════════════════════════════════════════════════════════════╗\n'
-    printf '║                                                            ║\n'
-    printf '║      DDNS Daemon - Dynamic DNS Update Daemon               ║\n'
-    printf '║                                                            ║\n'
-    printf '║                        Version %-21s║\n' "${VERSION}"
-    printf '║                                                            ║\n'
-    printf '║      https://github.com/ddns-lab/ddns                      ║\n'
-    printf '║                                                            ║\n'
-    printf '╚════════════════════════════════════════════════════════════╝\n'
+    printf '+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%+\n'
+    printf '|                                                              |\n'
+    printf '|      DDNS Daemon - Dynamic DNS Update Daemon                |\n'
+    printf '|                                                              |\n'
+    printf '|                        Version %-21s|\n' "${VERSION}"
+    printf '|                                                              |\n'
+    printf '|      https://github.com/ddns-lab/ddns                        |\n'
+    printf '|                                                              |\n'
+    printf '+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%+\n'
     printf '\n'
 }
 
