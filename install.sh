@@ -207,6 +207,23 @@ download_binary() {
 create_env_file() {
     local env_file="${CONFIGDIR}/ddnsd.env"
 
+    # Check if config file already exists
+    if [ -f "${env_file}" ]; then
+        log_info "Configuration file already exists: ${env_file}"
+
+        # Check if new options need to be added
+        if ! grep -q "DDNS_IP_SOURCE_VERSION" "${env_file}"; then
+            log_info "Adding new configuration option: DDNS_IP_SOURCE_VERSION"
+            echo "" >> "${env_file}"
+            echo "# IP Version to monitor (v4, v6, both) - Added in v0.1.0" >> "${env_file}"
+            echo "# DDNS_IP_SOURCE_VERSION=v6" >> "${env_file}"
+            log_success "Updated configuration file with new options"
+        else
+            log_info "Configuration file is up-to-date, preserving existing settings"
+        fi
+        return
+    fi
+
     log_info "Creating environment file: ${env_file}"
 
     cat > "${env_file}" << 'EOF'
@@ -365,6 +382,33 @@ install_systemd() {
         return 1
     fi
 
+    # Check if already installed
+    local is_upgrade=false
+    if [ -f "${BINDIR}/ddnsd" ]; then
+        local current_version
+        current_version=$("${BINDIR}/ddnsd" --version 2>/dev/null || echo "unknown")
+
+        log_warn "ddnsd is already installed (version: ${current_version})"
+        log_info "This will upgrade the binary while preserving your configuration."
+
+        if [ "${NONINTERACTIVE}" != "true" ]; then
+            printf "%s" "Continue with upgrade? [y/N] "
+            read -r response
+            case "$response" in
+                [yY][eE][sS]|[yY])
+                    log_info "Proceeding with upgrade..."
+                    is_upgrade=true
+                    ;;
+                *)
+                    log_info "Upgrade cancelled by user"
+                    return 0
+                    ;;
+            esac
+        else
+            is_upgrade=true
+        fi
+    fi
+
     # Create directories
     mkdir -p "${BINDIR}"
     mkdir -p "${CONFIGDIR}"
@@ -373,13 +417,15 @@ install_systemd() {
     # Download binary
     download_binary "${VERSION}" || return 1
 
-    # Create configuration
+    # Create configuration (will preserve existing if found)
     create_env_file || return 1
 
-    # Prompt for configuration if interactive
-    prompt_configuration
+    # Skip prompt configuration on upgrade (already configured)
+    if [ "${is_upgrade}" != "true" ] && [ "${NONINTERACTIVE}" != "true" ]; then
+        prompt_configuration
+    fi
 
-    # Create systemd service
+    # Create systemd service (always update to get latest changes)
     create_systemd_service || return 1
 
     # Verify
