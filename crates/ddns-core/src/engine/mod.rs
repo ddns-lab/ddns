@@ -195,7 +195,13 @@ impl DdnsEngine {
             records_count: self.records.len(),
         });
 
-        // Get initial IP
+        // Trigger initial DNS updates for all configured records
+        info!("Triggering initial DNS updates");
+        if let Err(e) = self.trigger_initial_updates().await {
+            error!("Failed to handle initial DNS updates: {}", e);
+        }
+
+        // Get initial IP for logging
         let current_ip = self.ip_source.current().await?;
         info!("Initial IP: {}", current_ip);
 
@@ -251,6 +257,44 @@ impl DdnsEngine {
         // Flush state before exiting
         self.state_store.flush().await?;
         info!("State flushed, engine stopped");
+
+        Ok(())
+    }
+
+    /// Trigger initial DNS updates on startup
+    ///
+    /// This ensures all configured records are up-to-date on startup,
+    /// even if no IP change event is received.
+    ///
+    /// The logic:
+    /// 1. Get current IP from ip_source
+    /// 2. Create an IpChangeEvent with previous_ip=None (indicates initial check)
+    /// 3. Process the event, which will:
+    ///    - Check StateStore for last known IP
+    ///    - If different or missing, call provider to update/create record
+    ///    - If same, skip update (idempotency)
+    async fn trigger_initial_updates(&self) -> Result<()> {
+        use crate::traits::IpChangeEvent;
+
+        // Get current IP (this may be v4 or v6 depending on ip_source configuration)
+        let current_ip = match self.ip_source.current().await {
+            Ok(ip) => ip,
+            Err(e) => {
+                // If we can't get current IP, log warning but don't fail startup
+                // The watch() loop will handle IP changes when they occur
+                warn!("Failed to get current IP for initial update: {}", e);
+                return Ok(());
+            }
+        };
+
+        info!("Current IP: {}", current_ip);
+
+        // Create an initial event with previous_ip=None
+        // This forces update_record_with_retry to check and update as needed
+        let initial_event = IpChangeEvent::new(current_ip, None);
+
+        // Process the event for all matching records
+        self.handle_ip_change(initial_event).await?;
 
         Ok(())
     }
