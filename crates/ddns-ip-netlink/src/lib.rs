@@ -300,8 +300,8 @@ impl IpSource for NetlinkIpSource {
         use netlink_sys::{Socket, SocketAddr};
         use tokio_stream::wrappers::UnboundedReceiverStream;
 
-        let _interface = self.interface.clone();
-        let _version = self.version;
+        let interface = self.interface.clone();
+        let version = self.version;
         let debounce_duration = self.debounce_duration;
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -344,8 +344,28 @@ impl IpSource for NetlinkIpSource {
 
             tracing::info!("Netlink IP monitoring started");
 
-            let _last_ip: Option<IpAddr> = None;
+            // Track last known IPs separately for v4 and v6
+            let mut last_v4: Option<IpAddr> = None;
+            let mut last_v6: Option<IpAddr> = None;
             let mut last_event = Instant::now() - Duration::from_secs(60);
+
+            // Create a temporary source instance to query addresses
+            let temp_source = NetlinkIpSource {
+                interface: interface.clone(),
+                version,
+                debounce_duration,
+            };
+
+            // Get initial addresses
+            if let Ok(addrs) = temp_source.query_addresses_proc() {
+                for addr in addrs {
+                    match addr {
+                        IpAddr::V4(_) => last_v4 = Some(addr),
+                        IpAddr::V6(_) => last_v6 = Some(addr),
+                    }
+                }
+                tracing::info!("Initial IPs: v4={:?}, v6={:?}", last_v4, last_v6);
+            }
 
             // Receive loop
             let mut recv_buf = vec![0u8; 8192];
@@ -366,25 +386,50 @@ impl IpSource for NetlinkIpSource {
                             if msg_type == libc::RTM_NEWADDR as u8
                                 || msg_type == libc::RTM_DELADDR as u8
                             {
-                                // For now, trigger a re-query of all IPs on any address change
-                                // This is simpler than parsing the full netlink message
-                                tracing::debug!("Netlink address change event received");
-
                                 let now = Instant::now();
 
                                 // Apply debounce
                                 if now.duration_since(last_event) > debounce_duration {
-                                    // In a real implementation, we would parse the netlink message
-                                    // to extract the new IP address. For now, we'll emit a placeholder
-                                    // to show that the mechanism works.
+                                    // Re-query all IPs
+                                    if let Ok(addrs) = temp_source.query_addresses_proc() {
+                                        let mut new_v4: Option<IpAddr> = None;
+                                        let mut new_v6: Option<IpAddr> = None;
 
-                                    // TODO: Parse netlink message to extract actual IP
-                                    // For now, just log the event
-                                    tracing::info!(
-                                        "Address change detected (parsing not yet implemented)"
-                                    );
+                                        for addr in addrs {
+                                            match addr {
+                                                IpAddr::V4(_) => new_v4 = Some(addr),
+                                                IpAddr::V6(_) => new_v6 = Some(addr),
+                                            }
+                                        }
 
-                                    last_event = now;
+                                        // Check for IPv4 changes
+                                        if last_v4 != new_v4 {
+                                            if let Some(v4) = new_v4 {
+                                                tracing::info!("IPv4 changed: {:?} -> {:?}", last_v4, v4);
+                                                let event = IpChangeEvent::new(v4, last_v4);
+                                                if tx.send(event).is_err() {
+                                                    tracing::error!("Receiver dropped, stopping monitor");
+                                                    break;
+                                                }
+                                                last_v4 = new_v4;
+                                            }
+                                        }
+
+                                        // Check for IPv6 changes
+                                        if last_v6 != new_v6 {
+                                            if let Some(v6) = new_v6 {
+                                                tracing::info!("IPv6 changed: {:?} -> {:?}", last_v6, v6);
+                                                let event = IpChangeEvent::new(v6, last_v6);
+                                                if tx.send(event).is_err() {
+                                                    tracing::error!("Receiver dropped, stopping monitor");
+                                                    break;
+                                                }
+                                                last_v6 = new_v6;
+                                            }
+                                        }
+
+                                        last_event = now;
+                                    }
                                 }
                             }
                         }

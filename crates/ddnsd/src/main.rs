@@ -32,7 +32,20 @@
 // - `DDNS_PROVIDER_ZONE_ID`: Zone ID (optional)
 //
 // ### Records
-// - `DDNS_RECORDS`: Comma-separated list of DNS records to manage
+// - `DDNS_RECORDS`: Comma-separated list of DNS records with optional types
+//
+//   Format: `record_name[:type]`
+//
+//   Types:
+//   - `A` - IPv4 address record
+//   - `AAAA` - IPv6 address record
+//   - `Auto` (or omit) - Auto-detect based on IP version
+//
+//   Examples:
+//   - `example.com` → Auto (default)
+//   - `example.com:A` → A record only (IPv4)
+//   - `example.com:AAAA` → AAAA record only (IPv6)
+//   - `a.example.com:A,aaaa.example.com:AAAA` → Multiple records with types
 //
 // ### State Store
 // - `DDNS_STATE_STORE_TYPE`: Type of state store (file, memory)
@@ -44,16 +57,25 @@
 //
 // ## Example
 //
+// ### Monitor both IPv4 and IPv6, update A and AAAA records
+//
 // ```bash
 // export DDNS_IP_SOURCE_TYPE=netlink
-// export DDNS_IP_SOURCE_INTERFACE=eth0
-// export DDNS_IP_SOURCE_VERSION=v6  # Optional: v4, v6, or both (default: both)
+// export DDNS_IP_SOURCE_VERSION=both  # Monitor both IP versions
 // export DDNS_PROVIDER_TYPE=cloudflare
 // export DDNS_PROVIDER_API_TOKEN=your_token
-// export DDNS_RECORDS=example.com,www.example.com
+// export DDNS_RECORDS=example.com:A,example.com:AAAA
 // export DDNS_STATE_STORE_TYPE=file
 // export DDNS_STATE_STORE_PATH=/var/lib/ddns/state.json
+// ddnsd
+// ```
 //
+// ### Monitor IPv4 only, update A record
+//
+// ```bash
+// export DDNS_IP_SOURCE_TYPE=netlink
+// export DDNS_IP_SOURCE_VERSION=v4
+// export DDNS_RECORDS=example.com:A
 // ddnsd
 // ```
 
@@ -64,7 +86,7 @@ use std::time::Duration;
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
-use ddns_core::config::IpVersion;
+use ddns_core::config::{IpVersion, RecordType};
 
 #[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
@@ -561,10 +583,33 @@ async fn run_daemon(config: Config) -> Result<()> {
     };
 
     // Create record configs
+    // Support format: "name" or "name:type" where type is A, AAAA, or Auto
     let record_configs: Vec<RecordConfig> = config
         .records
         .iter()
-        .map(|name| RecordConfig::new(name.as_str()))
+        .map(|record_spec| {
+            // Parse "name:type" format
+            let parts: Vec<&str> = record_spec.split(':').collect();
+            let name = parts[0];
+            let record_type = if parts.len() > 1 {
+                match parts[1].to_uppercase().as_str() {
+                    "A" => RecordType::A,
+                    "AAAA" => RecordType::Aaaa,
+                    "AUTO" | "" => RecordType::Auto,
+                    _ => {
+                        eprintln!(
+                            "WARNING: Invalid record type '{}' for '{}', using Auto",
+                            parts[1], name
+                        );
+                        RecordType::Auto
+                    }
+                }
+            } else {
+                RecordType::Auto
+            };
+
+            RecordConfig::new(name).with_record_type(record_type)
+        })
         .collect();
 
     // Create engine config

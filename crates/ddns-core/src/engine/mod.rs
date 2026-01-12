@@ -262,18 +262,37 @@ impl DdnsEngine {
     /// - `event`: The IP change event
     async fn handle_ip_change(&self, event: IpChangeEvent) -> Result<()> {
         debug!(
-            "IP change detected: {} -> {:?}",
+            "IP change detected: {} -> {:?} (version: {:?})",
             event
                 .previous_ip
                 .map(|ip| ip.to_string())
                 .unwrap_or("None".to_string()),
-            event.new_ip
+            event.new_ip,
+            event.version
         );
 
         // Process each configured record
         for record in &self.records {
             if !record.enabled {
                 debug!("Record {} is disabled, skipping", record.name);
+                continue;
+            }
+
+            // Filter records by IP version match
+            // - A records only process IPv4 events
+            // - AAAA records only process IPv6 events
+            // - Auto records process all events
+            let should_process = match record.record_type {
+                crate::config::RecordType::A => event.version == crate::traits::IpVersion::V4,
+                crate::config::RecordType::Aaaa => event.version == crate::traits::IpVersion::V6,
+                crate::config::RecordType::Auto => true,
+            };
+
+            if !should_process {
+                debug!(
+                    "Skipping record {} (type: {:?}) for IP version {:?}",
+                    record.name, record.record_type, event.version
+                );
                 continue;
             }
 

@@ -235,7 +235,7 @@ DDNS_IP_SOURCE_TYPE=netlink
 # DDNS_IP_SOURCE_INTERFACE=eth0
 # DDNS_IP_SOURCE_URL=https://icanhazip.com
 # DDNS_IP_SOURCE_INTERVAL=300
-# DDNS_IP_SOURCE_VERSION=v6  # Options: v4, v6, both (default: both)
+# DDNS_IP_SOURCE_VERSION=both  # Options: v4, v6, both (default: both)
 
 # DNS Provider Configuration
 DDNS_PROVIDER_TYPE=cloudflare
@@ -243,7 +243,13 @@ DDNS_PROVIDER_API_TOKEN=your_api_token_here
 DDNS_PROVIDER_ZONE_ID=your_zone_id_here
 
 # Records to update (comma-separated)
-DDNS_RECORDS=example.com,www.example.com
+# Format: name[:type] where type is A, AAAA, or Auto
+# Examples:
+#   - example.com              → Auto-detect (default)
+#   - example.com:A            → IPv4 A record only
+#   - example.com:AAAA         → IPv6 AAAA record only
+#   - a.example.com:A,aaaa.example.com:AAAA → Multiple records
+#DDNS_RECORDS=example.com:A,example.com:AAAA
 
 # State Store Configuration
 DDNS_STATE_STORE_TYPE=file
