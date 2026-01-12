@@ -113,6 +113,52 @@ impl From<DdnsExitCode> for ExitCode {
     }
 }
 
+/// Print help message
+fn print_help() {
+    println!("ddnsd {} - Dynamic DNS Daemon\n", env!("CARGO_PKG_VERSION"));
+    println!("USAGE:");
+    println!("  ddnsd                    Run the daemon (configure via env vars)");
+    println!("  ddnsd --version          Show version information");
+    println!("  ddnsd --help             Show this help message");
+    println!();
+    println!("ENVIRONMENT VARIABLES:");
+    println!("  IP Source Configuration:");
+    println!("    DDNS_IP_SOURCE_TYPE      IP source type (netlink, http) [default: netlink]");
+    println!("    DDNS_IP_SOURCE_INTERFACE Network interface (for netlink)");
+    println!("    DDNS_IP_SOURCE_URL      URL to fetch IP from (for http)");
+    println!("    DDNS_IP_SOURCE_INTERVAL Poll interval in seconds (for http) [default: 60]");
+    println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
+    println!();
+    println!("  DNS Provider Configuration:");
+    println!("    DDNS_PROVIDER_TYPE       Provider type (cloudflare) [default: cloudflare]");
+    println!("    DDNS_PROVIDER_API_TOKEN API token [required]");
+    println!("    DDNS_PROVIDER_ZONE_ID    Zone ID (optional)");
+    println!();
+    println!("  Records:");
+    println!("    DDNS_RECORDS             Comma-separated records with optional types");
+    println!("                             Format: name[:type]");
+    println!("                             Types: A, AAAA, Auto (default)");
+    println!("                             Example: example.com:A,example.com:AAAA");
+    println!();
+    println!("  State Store:");
+    println!("    DDNS_STATE_STORE_TYPE     Type (file, memory) [default: file]");
+    println!("    DDNS_STATE_STORE_PATH     Path to state file (for file store)");
+    println!();
+    println!("  Engine:");
+    println!("    DDNS_MAX_RETRIES          Max retry attempts [default: 3]");
+    println!("    DDNS_RETRY_DELAY_SECS     Delay between retries [default: 5]");
+    println!("    DDNS_LOG_LEVEL            Log level (trace, debug, info, warn, error)");
+    println!();
+    println!("EXAMPLES:");
+    println!("  # Monitor both IPv4 and IPv6");
+    println!("  export DDNS_IP_SOURCE_VERSION=both");
+    println!("  export DDNS_RECORDS=example.com:A,example.com:AAAA");
+    println!("  ddnsd");
+    println!();
+    println!("DOCUMENTATION:");
+    println!("  https://github.com/ddns-lab/ddns");
+}
+
 /// Application configuration
 #[allow(dead_code)]
 struct Config {
@@ -409,6 +455,21 @@ impl Config {
 }
 
 fn main() -> ExitCode {
+    // Check for --version flag
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--version" | "-V" => {
+                println!("ddnsd {}", env!("CARGO_PKG_VERSION"));
+                return DdnsExitCode::CleanShutdown.into();
+            }
+            "--help" | "-h" => {
+                print_help();
+                return DdnsExitCode::CleanShutdown.into();
+            }
+            _ => {}
+        }
+    }
+
     // Load configuration from environment
     let config = match Config::from_env() {
         Ok(cfg) => cfg,
