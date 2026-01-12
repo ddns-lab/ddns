@@ -62,15 +62,15 @@ log_error() {
 # Print header
 print_header() {
     printf '\n'
-    printf '+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%+\n'
-    printf '|                                                              |\n'
-    printf '|      DDNS Daemon - Dynamic DNS Update Daemon                |\n'
-    printf '|                                                              |\n'
-    printf '|                        Version %-21s|\n' "${VERSION}"
-    printf '|                                                              |\n'
-    printf '|      https://github.com/ddns-lab/ddns                        |\n'
-    printf '|                                                              |\n'
-    printf '+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%+\n'
+    printf '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n'
+    printf '                                                              \n'
+    printf '      DDNS Daemon - Dynamic DNS Update Daemon                \n'
+    printf '                                                              \n'
+    printf '                        Version %s\n' "${VERSION}"
+    printf '                                                              \n'
+    printf '      https://github.com/ddns-lab/ddns                        \n'
+    printf '                                                              \n'
+    printf '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n'
     printf '\n'
 }
 
@@ -433,6 +433,18 @@ install_systemd() {
 
     # Create systemd service (always update to get latest changes)
     create_systemd_service || return 1
+
+    # Restart service if this is an upgrade and service is running
+    if [ "${is_upgrade}" = "true" ]; then
+        if systemctl is-active --quiet ddnsd.service; then
+            log_info "Restarting ddnsd service to apply update..."
+            systemctl restart ddnsd.service
+            log_success "Service restarted successfully"
+            sleep 2
+            log_info "New service logs:"
+            journalctl -u ddnsd.service -n 10 --no-pager
+        fi
+    fi
 
     # Verify
     verify_installation || return 1
