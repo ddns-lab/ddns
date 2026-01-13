@@ -133,6 +133,19 @@ impl StateStore for MemoryStateStore {
     }
 }
 
+/// Factory for creating memory state stores
+pub struct MemoryStateStoreFactory;
+
+#[async_trait]
+impl StateStoreFactory for MemoryStateStoreFactory {
+    async fn create(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Box<dyn StateStore>, crate::Error> {
+        Ok(Box::new(MemoryStateStore::new()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,18 +201,5 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert!(records.contains(&"example.com".to_string()));
         assert!(records.contains(&"test.com".to_string()));
-    }
-}
-
-/// Factory for creating memory state stores
-pub struct MemoryStateStoreFactory;
-
-#[async_trait]
-impl StateStoreFactory for MemoryStateStoreFactory {
-    async fn create(
-        &self,
-        _config: &serde_json::Value,
-    ) -> Result<Box<dyn StateStore>, crate::Error> {
-        Ok(Box::new(MemoryStateStore::new()))
     }
 }

@@ -208,19 +208,19 @@ impl ProviderRegistry {
             crate::config::StateStoreConfig::Custom { factory, .. } => factory,
         };
 
-        let stores = self.state_stores.read().unwrap();
-
-        let factory = stores
-            .get(store_type)
-            .ok_or_else(|| Error::config(format!("Unknown state store type: {}", store_type)))?
-            .clone();
-
         // Create the state store config JSON
         let config_json = serde_json::to_value(config)?;
 
-        // Release the lock before calling async create
-        drop(stores);
+        // Get factory with lock held only for this scope
+        let factory = {
+            let stores = self.state_stores.read().unwrap();
+            stores
+                .get(store_type)
+                .ok_or_else(|| Error::config(format!("Unknown state store type: {}", store_type)))?
+                .clone()
+        };
 
+        // Lock is released before await
         factory.create(&config_json).await
     }
 

@@ -411,6 +411,34 @@ impl StateStore for FileStateStore {
     }
 }
 
+/// Factory for creating file state stores
+pub struct FileStateStoreFactory;
+
+#[async_trait]
+impl StateStoreFactory for FileStateStoreFactory {
+    async fn create(
+        &self,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn StateStore>, crate::Error> {
+        // Try to parse as StateStoreConfig
+        if let Ok(state_store_config) =
+            serde_json::from_value::<crate::config::StateStoreConfig>(config.clone())
+            && let crate::config::StateStoreConfig::File { path } = state_store_config
+        {
+            let store = FileStateStore::new(path).await?;
+            return Ok(Box::new(store));
+        }
+
+        // Try to extract path directly
+        if let Some(path_str) = config.get("path").and_then(|v| v.as_str()) {
+            let store = FileStateStore::new(path_str.to_string()).await?;
+            return Ok(Box::new(store));
+        }
+
+        Err(Error::config("Invalid file state store config"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,34 +527,5 @@ mod tests {
         let store2 = FileStateStore::new(&path).await.unwrap();
         let final_ip = store2.get_last_ip("example.com").await.unwrap();
         assert_eq!(final_ip, Some("1.2.3.9".parse().unwrap()));
-    }
-}
-
-/// Factory for creating file state stores
-pub struct FileStateStoreFactory;
-
-#[async_trait]
-impl StateStoreFactory for FileStateStoreFactory {
-    async fn create(
-        &self,
-        config: &serde_json::Value,
-    ) -> Result<Box<dyn StateStore>, crate::Error> {
-        // Try to parse as StateStoreConfig
-        if let Ok(state_store_config) =
-            serde_json::from_value::<crate::config::StateStoreConfig>(config.clone())
-        {
-            if let crate::config::StateStoreConfig::File { path } = state_store_config {
-                let store = FileStateStore::new(path).await?;
-                return Ok(Box::new(store));
-            }
-        }
-
-        // Try to extract path directly
-        if let Some(path_str) = config.get("path").and_then(|v| v.as_str()) {
-            let store = FileStateStore::new(path_str.to_string()).await?;
-            return Ok(Box::new(store));
-        }
-
-        Err(Error::config("Invalid file state store config"))
     }
 }
