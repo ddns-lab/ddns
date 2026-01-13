@@ -97,7 +97,7 @@ async fn retries_can_be_disabled_via_config() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -198,7 +198,7 @@ async fn retries_honor_explicit_configuration() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 

@@ -179,7 +179,7 @@ impl DdnsEngine {
     /// - `Ok(())`: Clean shutdown
     /// - `Err(Error)`: Fatal error
     pub async fn run(&self) -> Result<()> {
-        self.run_internal(None).await
+        self.run_internal(None, false).await
     }
 
     /// Internal run implementation that accepts an optional shutdown signal
@@ -187,18 +187,22 @@ impl DdnsEngine {
     /// # Parameters
     ///
     /// - `shutdown_rx`: Optional oneshot receiver to trigger shutdown (for testing)
+    /// - `skip_initial_updates`: If true, skip initial DNS updates on startup (for testing)
     async fn run_internal(
         &self,
         shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+        skip_initial_updates: bool,
     ) -> Result<()> {
         self.emit_event(EngineEvent::Started {
             records_count: self.records.len(),
         });
 
-        // Trigger initial DNS updates for all configured records
-        info!("Triggering initial DNS updates");
-        if let Err(e) = self.trigger_initial_updates().await {
-            error!("Failed to handle initial DNS updates: {}", e);
+        // Trigger initial DNS updates for all configured records (unless testing)
+        if !skip_initial_updates {
+            info!("Triggering initial DNS updates");
+            if let Err(e) = self.trigger_initial_updates().await {
+                error!("Failed to handle initial DNS updates: {}", e);
+            }
         }
 
         // Get initial IP for logging
@@ -533,6 +537,8 @@ impl DdnsEngine {
     ///
     /// This is `pub` for testing purposes only.
     ///
+    /// Run the engine with programmatic shutdown (for testing)
+    ///
     /// **TESTING ONLY**: Architecture contract tests require controlled shutdown.
     /// Production daemon code should use `run()` instead, which manages shutdown
     /// via OS signals (SIGTERM/SIGINT) rather than programmatic channels.
@@ -542,7 +548,22 @@ impl DdnsEngine {
         &self,
         shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     ) -> Result<()> {
-        self.run_internal(shutdown_rx).await
+        self.run_internal(shutdown_rx, false).await
+    }
+
+    /// Run the engine without initial DNS updates (for testing)
+    ///
+    /// **TESTING ONLY**: This method skips the initial DNS update that happens on startup.
+    /// Use this for contract tests that need to verify event-driven behavior without
+    /// the initial update interfering with test assertions.
+    ///
+    /// External providers and IP sources MUST NOT call this method.
+    #[doc(hidden)]
+    pub async fn run_for_testing(
+        &self,
+        shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    ) -> Result<()> {
+        self.run_internal(shutdown_rx, true).await
     }
 }
 

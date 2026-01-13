@@ -38,7 +38,7 @@ async fn shutdown_signal_terminates_engine() {
 
     // Start engine
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Wait for startup
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -85,7 +85,7 @@ async fn shutdown_flushes_state() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -167,7 +167,7 @@ async fn shutdown_during_ip_update() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -249,7 +249,7 @@ async fn no_future_leaks_after_shutdown() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -283,7 +283,7 @@ async fn multiple_shutdown_calls_are_safe() {
     let (shutdown_tx2, _shutdown_rx2) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx1)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx1)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 

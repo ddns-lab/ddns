@@ -45,7 +45,7 @@ async fn duplicate_ip_does_not_trigger_dns_update() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -98,7 +98,7 @@ async fn restart_simulation_no_duplicate_updates() {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let engine_handle =
-            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+            tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -151,7 +151,7 @@ async fn restart_simulation_no_duplicate_updates() {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let engine_handle =
-            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+            tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -201,7 +201,7 @@ async fn ip_change_after_restart_triggers_update() {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let engine_handle =
-            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+            tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -241,7 +241,7 @@ async fn ip_change_after_restart_triggers_update() {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let engine_handle =
-            tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+            tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 

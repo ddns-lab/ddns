@@ -40,7 +40,7 @@ async fn idle_no_dns_updates_without_ip_events() {
 
     // Run engine in background
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Wait a brief moment to ensure the engine is running
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -114,7 +114,7 @@ async fn idle_no_background_polling() {
 
     // Run engine
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Let it run briefly
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -202,7 +202,7 @@ async fn idle_no_periodic_wakeups() {
 
     // Run engine
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Let it run for 200ms
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;

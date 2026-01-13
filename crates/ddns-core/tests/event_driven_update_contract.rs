@@ -54,7 +54,7 @@ async fn one_ip_change_triggers_exactly_one_dns_update() {
 
     // Act: Run engine in background
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Wait for engine to start
     let _ = tokio::time::timeout(tokio::time::Duration::from_millis(100), event_rx.recv()).await;
@@ -105,7 +105,7 @@ async fn multiple_ip_changes_trigger_multiple_updates() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     // Wait for startup
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -157,7 +157,7 @@ async fn same_ip_does_not_trigger_update() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
@@ -210,7 +210,7 @@ async fn no_polling_between_events() {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     let engine_handle =
-        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
 
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
