@@ -296,7 +296,7 @@ impl IpSource for NetlinkIpSource {
         };
 
         selected
-            .map(|&ip| ip)
+            .copied()
             .ok_or_else(|| Error::not_found("No suitable IP addresses found"))
     }
 
@@ -407,41 +407,41 @@ impl IpSource for NetlinkIpSource {
                                         }
 
                                         // Check for IPv4 changes
-                                        if last_v4 != new_v4 {
-                                            if let Some(v4) = new_v4 {
-                                                tracing::info!(
-                                                    "IPv4 changed: {:?} -> {:?}",
-                                                    last_v4,
-                                                    v4
+                                        if last_v4 != new_v4
+                                            && let Some(v4) = new_v4
+                                        {
+                                            tracing::info!(
+                                                "IPv4 changed: {:?} -> {:?}",
+                                                last_v4,
+                                                v4
+                                            );
+                                            let event = IpChangeEvent::new(v4, last_v4);
+                                            if tx.send(event).is_err() {
+                                                tracing::error!(
+                                                    "Receiver dropped, stopping monitor"
                                                 );
-                                                let event = IpChangeEvent::new(v4, last_v4);
-                                                if tx.send(event).is_err() {
-                                                    tracing::error!(
-                                                        "Receiver dropped, stopping monitor"
-                                                    );
-                                                    break;
-                                                }
-                                                last_v4 = new_v4;
+                                                break;
                                             }
+                                            last_v4 = new_v4;
                                         }
 
                                         // Check for IPv6 changes
-                                        if last_v6 != new_v6 {
-                                            if let Some(v6) = new_v6 {
-                                                tracing::info!(
-                                                    "IPv6 changed: {:?} -> {:?}",
-                                                    last_v6,
-                                                    v6
+                                        if last_v6 != new_v6
+                                            && let Some(v6) = new_v6
+                                        {
+                                            tracing::info!(
+                                                "IPv6 changed: {:?} -> {:?}",
+                                                last_v6,
+                                                v6
+                                            );
+                                            let event = IpChangeEvent::new(v6, last_v6);
+                                            if tx.send(event).is_err() {
+                                                tracing::error!(
+                                                    "Receiver dropped, stopping monitor"
                                                 );
-                                                let event = IpChangeEvent::new(v6, last_v6);
-                                                if tx.send(event).is_err() {
-                                                    tracing::error!(
-                                                        "Receiver dropped, stopping monitor"
-                                                    );
-                                                    break;
-                                                }
-                                                last_v6 = new_v6;
+                                                break;
                                             }
+                                            last_v6 = new_v6;
                                         }
 
                                         last_event = now;
