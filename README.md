@@ -4,6 +4,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://www.rust-lang.org)
 [![GitHub Release](https://img.shields.io/github/v/release/ddns-lab/ddns)](https://github.com/ddns-lab/ddns/releases/latest)
+[![Stars](https://img.shields.io/github/stars/ddns-lab/ddns?style=social)](https://github.com/ddns-lab/ddns/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/ddns-lab/ddns/total.svg)](https://github.com/ddns-lab/ddns/releases)
+[![Issues](https://img.shields.io/github/issues/ddns-lab/ddns)](https://github.com/ddns-lab/ddns/issues)
+[![codecov](https://codecov.io/gh/ddns-lab/ddns/branch/main/graph/badge.svg)](https://codecov.io/gh/ddns-lab/ddns)
 
 An event-driven Dynamic DNS system built with Rust, designed for high performance and **minimal resource consumption**.
 
@@ -70,16 +74,20 @@ ddns/
 ├── .ai/                         # AI development contracts
 │   ├── AI_CONTRACT.md           # ⚠️ Non-negotiable architectural constraints
 │   └── QUICK_START.md           # Quick reference for AI agents
+├── .github/workflows/           # CI/CD pipelines
+│   ├── ci.yml                   # Test, lint, security audit
+│   └── release.yml              # Automated releases
 ├── crates/
 │   ├── ddns-core/               # Core library (traits, engine, registry)
 │   ├── ddnsd/                   # Daemon binary
 │   ├── ddns-provider-cloudflare/ # Cloudflare DNS provider ✅
-│   └── ddns-ip-netlink/         # Netlink IP source (🚧 skeleton)
+│   ├── ddns-ip-netlink/         # Netlink IP source (Linux) ✅
+│   └── ddns-ip-http/            # HTTP IP source (fallback) ✅
 ├── docs/                        # Architecture documentation
 │   └── PHASE_22_VALIDATION.md   # Cloudflare provider validation report
 ├── examples/                    # Example programs and validation tools
 │   └── cloudflare-validation.rs # Real environment validation tool
-├── deploy/                      # Deployment scripts and configurations
+├── install.sh                   # One-line installer (Linux)
 ├── CLAUDE.md                    # Comprehensive development guide
 └── README.md
 ```
@@ -93,68 +101,151 @@ ddns/
 
 ## Implementation Status
 
-### ✅ Complete
-- **Core architecture**: Trait definitions, engine orchestration, provider registry
-- **Cloudflare DNS provider**: Production-ready with full validation
+### ✅ Production-Ready (v0.1.1)
+
+**Core Components:**
+- ✅ **Event-driven engine**: Async orchestration with idempotency & retry logic
+- ✅ **Provider registry**: Plugin system for dynamic provider/IP source registration
+- ✅ **State management**: File & Memory stores with atomic writes and backup recovery
+
+**IP Sources:**
+- ✅ **Netlink IP source** (`ddns-ip-netlink`): Linux kernel event-driven (RTM_NEWADDR/RTM_DELADDR)
+- ✅ **HTTP IP source** (`ddns-ip-http`): Polling-based with configurable interval
+- ✅ **IPv4/IPv6 support**: Auto-detection or explicit version selection
+
+**DNS Providers:**
+- ✅ **Cloudflare provider** (`ddns-provider-cloudflare`):
   - Automatic zone discovery
-  - A and AAAA record support (IPv4/IPv6)
+  - A/AAAA record updates (IPv4/IPv6)
+  - **Auto-create records** (v0.1.1): Creates missing records automatically
   - Dry-run mode for safe testing
-  - Comprehensive error handling
-  - Real environment validated
-- **Security**: API token protection, environment variable configuration
-- **Documentation**: Comprehensive architecture and validation docs
+  - Comprehensive error handling and validation
 
-### 🚧 In Progress / Skeleton
-- **Netlink IP source**: Framework defined, Netlink operations TODO
-- **Daemon binary**: Configuration handling implemented, engine integration TODO
-- **File-based state store**: Framework defined, persistence TODO
-- **HTTP-based IP source**: Not started
+**Daemon & Deployment:**
+- ✅ **ddnsd binary**: Complete daemon with signal handling (SIGTERM/SIGINT)
+- ✅ **Environment variable config**: No config files needed
+- ✅ **Systemd integration**: `install.sh` with auto-start on boot
+- ✅ **Automated releases**: GitHub Actions with multi-platform builds
+- ✅ **Installer script**: One-line installation with upgrade support
 
-## Quick Start (Cloudflare Provider)
+**Testing & Quality:**
+- ✅ **Architectural contract tests**: Event-driven, idempotency, retry logic
+- ✅ **Comprehensive validation**: Real environment Cloudflare testing
+- ✅ **CI/CD**: GitHub Actions for test, lint, security audit, releases
 
-The Cloudflare provider is production-ready and can be used for validation and testing:
+### 📋 Upcoming Features
+
+- **Additional DNS providers**: Route53, DigitalOcean, Namecheap, etc.
+- **macOS/Windows support**: Native IP change detection (FSEvents/WSA)
+- **Web UI**: Optional dashboard for monitoring and configuration
+- **Metrics export**: Prometheus integration for observability
+- **Configuration profiles**: Multiple DNS provider support
+
+## Quick Start
+
+### One-Line Installation (Linux)
 
 ```bash
-# Build
-cargo build --release
-
-# Run validation tool (dry-run mode - safe)
-DDNS_MODE=dry-run \
-CLOUDFLARE_API_TOKEN=your_token \
-CLOUDFLARE_ZONE_ID=your_zone_id \
-DDNS_DOMAIN=example.com \
-DDNS_RECORD_NAME=ddns.example.com \
-DDNS_TEST_IP=1.2.3.4 \
-DDNS_RECORD_TYPE=A \
-cargo run --release --example cloudflare-validation
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
 ```
 
-See [`examples/cloudflare-validation.rs`](examples/cloudflare-validation.rs) for usage details.
+This will:
+- Download the latest binary for your platform
+- Install to `/usr/local/bin/ddnsd`
+- Create systemd service with auto-start on boot
+- Configure via `/etc/ddnsd/ddnsd.env`
 
-## Configuration
+See [`install.sh`](install.sh) for advanced options (non-interactive mode, custom paths, etc.).
 
-The daemon (when fully implemented) will be configured via environment variables:
+### Manual Configuration
+
+1. **Edit configuration:**
+```bash
+sudo vi /etc/ddnsd/ddnsd.env
+```
+
+2. **Configure your Cloudflare API token and records:**
+```bash
+# Cloudflare Configuration
+DDNS_PROVIDER_TYPE=cloudflare
+DDNS_PROVIDER_API_TOKEN=your_api_token_here
+DDNS_PROVIDER_ZONE_ID=your_zone_id_here
+
+# Records to update (comma-separated)
+# Format: name:type (type: A, AAAA, or Auto)
+DDNS_RECORDS=example.com:A,www.example.com:AAAA
+
+# IP Source Configuration
+DDNS_IP_SOURCE_TYPE=netlink  # or "http"
+# DDNS_IP_SOURCE_INTERFACE=eth0  # for netlink
+# DDNS_IP_SOURCE_URL=https://icanhazip.com  # for http
+# DDNS_IP_SOURCE_INTERVAL=300  # for http (seconds)
+# DDNS_IP_SOURCE_VERSION=both  # Options: v4, v6, both
+```
+
+3. **Start the service:**
+```bash
+sudo systemctl start ddnsd
+sudo systemctl enable ddnsd  # Auto-start on boot
+```
+
+4. **Check status and logs:**
+```bash
+sudo systemctl status ddnsd
+sudo journalctl -u ddnsd -f  # Follow logs
+```
+
+### Build from Source
 
 ```bash
-# IP Source
-export DDNS_IP_SOURCE_TYPE=netlink
-export DDNS_IP_SOURCE_INTERFACE=eth0
+# Clone repository
+git clone https://github.com/ddns-lab/ddns.git
+cd ddns
 
-# DNS Provider
+# Build with all features
+cargo build --release --bin ddnsd --features all
+
+# Run directly
+./target/release/ddnsd --version
+```
+
+## Usage Examples
+
+### Example 1: Update IPv4 A Record
+
+```bash
+export DDNS_IP_SOURCE_TYPE=netlink
+export DDNS_IP_SOURCE_VERSION=v4
 export DDNS_PROVIDER_TYPE=cloudflare
 export DDNS_PROVIDER_API_TOKEN=your_token
-export DDNS_PROVIDER_ZONE_ID=your_zone_id  # Optional
+export DDNS_RECORDS=example.com:A
 
-# Records to update
-export DDNS_RECORDS=example.com,www.example.com
+ddnsd
+```
 
-# State Store
-export DDNS_STATE_STORE_TYPE=file
-export DDNS_STATE_STORE_PATH=/var/lib/ddns/state.json
+### Example 2: Update Both IPv4 and IPv6
 
-# Engine
-export DDNS_MAX_RETRIES=3
-export DDNS_RETRY_DELAY_SECS=5
+```bash
+export DDNS_IP_SOURCE_TYPE=netlink
+export DDNS_IP_SOURCE_VERSION=both
+export DDNS_PROVIDER_TYPE=cloudflare
+export DDNS_PROVIDER_API_TOKEN=your_token
+export DDNS_RECORDS=example.com:A,example.com:AAAA
+
+ddnsd
+```
+
+### Example 3: HTTP Polling (Fallback for Non-Linux)
+
+```bash
+export DDNS_IP_SOURCE_TYPE=http
+export DDNS_IP_SOURCE_URL=https://icanhazip.com
+export DDNS_IP_SOURCE_INTERVAL=300  # 5 minutes
+export DDNS_PROVIDER_TYPE=cloudflare
+export DDNS_PROVIDER_API_TOKEN=your_token
+export DDNS_RECORDS=ddns.example.com
+
+ddnsd
 ```
 
 ## Development
@@ -208,10 +299,32 @@ Please read [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) before contributing. This
 
 This project uses GitHub Actions for continuous integration and deployment:
 
-- **CI**: Runs tests, formatting checks, and linting on every push and PR
-- **Security Audit**: Automated dependency vulnerability scanning
-- **Docker Build**: Validates Docker image builds on all platforms
-- **Dependencies**: Weekly check for outdated dependencies
-- **Coverage**: Code coverage tracking (with Codecov integration)
+- ✅ **CI**: Tests, formatting checks, and linting on every push and PR
+- ✅ **Security Audit**: Automated dependency vulnerability scanning
+- ✅ **Releases**: Automated multi-platform builds with GitHub release notes
+- ✅ **Coverage**: Code coverage tracking (Codecov)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/ddns-lab/ddns/ci.yml?branch=main)](https://github.com/ddns-lab/ddns/actions/workflows/ci.yml)
 
 All checks must pass before code can be merged into main.
+
+## Changelog
+
+### v0.1.1 (2025-01-14)
+- ✨ **Auto-create DNS records**: Automatically creates missing DNS records
+- 🐛 **Fix**: Cloudflare API 400 error (missing 'name' field in PUT request)
+- 🐛 **Fix**: Daemon crash after 30 seconds (removed timeout on shutdown wait)
+- 🐛 **Fix**: Initial DNS update not triggered on startup
+- 📝 **Docs**: Automatic release notes generation from commit history
+- 🧪 **Tests**: Fixed architectural contract tests with `run_for_testing()`
+
+### v0.1.0 (2025-01-13)
+- 🎉 **Initial release**: Event-driven DDNS system with:
+  - Linux Netlink IP source (RTM_NEWADDR/RTM_DELADDR)
+  - HTTP polling IP source (fallback for non-Linux)
+  - Cloudflare DNS provider with A/AAAA support
+  - File & Memory state stores with atomic writes
+  - Idempotency via state tracking
+  - Retry logic with exponential backoff
+  - Environment variable configuration
+  - Systemd integration with installer script
