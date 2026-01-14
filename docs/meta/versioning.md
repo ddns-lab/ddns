@@ -443,7 +443,7 @@ If accepted, we'll release as MAJOR version with migration guide.
 ## Summary
 
 **Versioning**: Semantic Versioning (SemVer 2.0.0)
-**Current Version**: 0.1.0 (pre-release)
+**Current Version**: 0.1.2 (stable)
 **Stable APIs**: Traits, Configs, Errors, StateRecord
 **Breaking Changes**: Require MAJOR version bump
 **Provider Compatibility**: Version constraints required

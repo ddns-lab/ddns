@@ -129,7 +129,7 @@ ddns/
 
 ## Implementation Status
 
-### ✅ Production-Ready (v0.1.1)
+### ✅ Production-Ready
 
 **Core Components:**
 - ✅ **Event-driven engine**: Async orchestration with idempotency & retry logic
@@ -145,7 +145,7 @@ ddns/
 - ✅ **Cloudflare provider** (`ddns-provider-cloudflare`):
   - Automatic zone discovery
   - A/AAAA record updates (IPv4/IPv6)
-  - **Auto-create records** (v0.1.1): Creates missing records automatically
+  - **Auto-create records**: Creates missing records automatically
   - Dry-run mode for safe testing
   - Comprehensive error handling and validation
 
@@ -337,6 +337,14 @@ This project uses GitHub Actions for continuous integration and deployment:
 All checks must pass before code can be merged into main.
 
 ## Changelog
+
+### v0.1.2 (2025-01-15)
+- 📚 **Docs**: Comprehensive documentation refactor (user/operations/architecture)
+- 📚 **Docs**: Added troubleshooting guide with 10 common issues
+- 📚 **Docs**: Added migration guide for version upgrades
+- 📚 **Docs**: Removed hardcoded version numbers for easier maintenance
+- 🧹 **Cleanup**: Removed duplicate documentation and unimplemented features
+- ✨ **Feature**: Documentation now categorized by user type
 
 ### v0.1.1 (2025-01-14)
 - ✨ **Auto-create DNS records**: Automatically creates missing DNS records

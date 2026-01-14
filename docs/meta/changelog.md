@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.1.2] - 2025-01-15
+
+### Added
+
+- **Comprehensive documentation**: Complete user, operations, and architecture documentation
+- **Documentation refactor**: User-centric categorization (user/operations/architecture/meta)
+- **Troubleshooting guide**: 10 common issues with solutions
+- **Migration guide**: Version upgrade instructions with rollback procedures
+- **Monitoring guide**: Log-based monitoring and alerting patterns
+
+### Changed
+
+- **Optimized version references**: Removed hardcoded version numbers to reduce maintenance burden
+- **Cleaned up documentation**: Removed duplicate and outdated documents
+- **Improved documentation navigation**: Clear paths for users, operators, and contributors
+
+### Removed
+
+- **Duplicate documentation**: INSTALL.md, docs/DEPLOYMENT.md, deploy/README.md
+- **Unimplemented features**: Docker and Kubernetes deployment artifacts (v0.2.0)
+- **Outdated deployment scripts**: install-systemd.sh (replaced by install.sh)
+
+### Docs
+
+- Added 10 new documentation files
+- Reorganized documentation into 5 categories
+- Separated user docs from operations docs
+- Created clear upgrade paths
+
+---
+
 ## [v0.1.1] - 2025-01-14
 
 ### Added
@@ -97,7 +128,7 @@ This project follows [Semantic Versioning](versioning.md):
 - **MINOR**: Backward-compatible functionality additions
 - **PATCH**: Backward-compatible bug fixes
 
-**Current stable version**: v0.1.1
+**Current stable version**: v0.1.2
 
 **Minimum supported version**: v0.1.0
 

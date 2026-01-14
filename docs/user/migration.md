@@ -7,12 +7,38 @@ Upgrading ddnsd between versions.
 ## 📋 Version Upgrade Paths
 
 **Current versions**:
-- v0.1.0 → v0.1.1 (this guide)
-- v0.1.1 → future versions (see changelog)
+- v0.1.1 → v0.1.2 (documentation release)
+- v0.1.0 → v0.1.1 (previous feature release)
 
 **Supported upgrade paths**:
-- ✅ v0.1.0 → v0.1.1 (smooth upgrade, no breaking changes)
-- ✅ v0.1.1 → latest (use standard upgrade procedure)
+- ✅ v0.1.0 → v0.1.2 (smooth upgrade, no breaking changes)
+- ✅ v0.1.1 → v0.1.2 (smooth upgrade, documentation only)
+- ✅ v0.1.2 → future versions (use standard upgrade procedure)
+
+---
+
+## 🚀 v0.1.1 → v0.1.2 Upgrade
+
+### What's New in v0.1.2
+
+**This is a documentation release**:
+- 📚 Comprehensive documentation refactor
+- 📚 New troubleshooting guide
+- 📚 New migration guide
+- 🧹 Removed duplicate and outdated documentation
+
+### Breaking Changes
+
+**None** - v0.1.2 is fully backward compatible with v0.1.1.
+
+### Upgrade Procedure
+
+Since this is a documentation-only release, **no code changes are required**.
+
+**Optional actions**:
+1. Review the new documentation structure
+2. Bookmark the [Troubleshooting Guide](troubleshooting.md)
+3. Check the [Operations Guide](../operations/) for production tips
 
 ---
 

@@ -865,7 +865,7 @@ For detailed information about versioning policies, compatibility guarantees, an
 
 **Quick Reference**:
 - **Policy**: Semantic Versioning (SemVer 2.0.0)
-- **Current Version**: 0.1.0 (pre-release)
+- **Current Version**: 0.1.2 (stable)
 - **Stable APIs**: Traits, Configs, Errors, StateRecord
 - **Breaking Changes**: Require MAJOR version bump
 - **Provider Compatibility**: Version constraints required in Cargo.toml

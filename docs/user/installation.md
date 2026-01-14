@@ -27,7 +27,7 @@ This will:
 
 ## 📋 Platform Requirements
 
-**Supported in v0.1.1**:
+**Currently supported**:
 - ✅ Linux (amd64)
 - ✅ systemd (for service management)
 

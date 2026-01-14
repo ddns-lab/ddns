@@ -4,9 +4,9 @@ Guide for monitoring ddnsd in production environments.
 
 ---
 
-## ⚠️ Status: v0.1.1
+## ⚠️ Status: Current Release
 
-**Currently implemented (v0.1.1)**:
+**Currently implemented**:
 - ✅ **Logging only** (via systemd journal)
 - ✅ Structured log fields
 - ✅ Log levels (trace/debug/info/warn/error)
@@ -20,7 +20,7 @@ Guide for monitoring ddnsd in production environments.
 
 ## 📝 Log-Based Monitoring
 
-**In v0.1.1**, all monitoring is done via log aggregation.
+**In the current release**, all monitoring is done via log aggregation.
 
 ### Viewing Logs
 

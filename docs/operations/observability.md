@@ -439,7 +439,7 @@ kubectl get pods -l app=ddnsd -n ddns-system
 // GET /health
 {
   "status": "healthy",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "uptime_seconds": 3600,
   "last_update": "2025-01-09T12:00:00Z",
   "records": 2,

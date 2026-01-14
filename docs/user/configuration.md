@@ -66,7 +66,7 @@ DDNS_RECORDS=example.com:AAAA
 DDNS_RECORDS=example.com:A,www.example.com:AAAA,api.example.com
 ```
 
-**v0.1.1 feature**: Records are **auto-created** if they don't exist in Cloudflare.
+**Feature**: Records are **auto-created** if they don't exist in Cloudflare.
 
 ---
 
@@ -114,7 +114,7 @@ DDNS_IP_SOURCE_INTERVAL=300  # Check every 5 minutes
 
 | Variable | Description | Default | Valid Values |
 |----------|-------------|---------|--------------|
-| `DDNS_PROVIDER_TYPE` | DNS provider | `cloudflare` | `cloudflare` (v0.1.1) |
+| `DDNS_PROVIDER_TYPE` | DNS provider | `cloudflare` | `cloudflare` (currently only option) |
 | `DDNS_PROVIDER_ZONE_ID` | Cloudflare Zone ID (optional) | Auto-detect | Cloudflare zone ID |
 
 ### DDNS_PROVIDER_ZONE_ID

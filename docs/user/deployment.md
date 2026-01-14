@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
 - ✅ Cloudflare API token
 - ✅ Root or sudo access
 
-**Not supported in v0.1.1**:
+**Not yet supported**:
 - ❌ Docker deployment (planned for v0.2.0)
 - ❌ Kubernetes deployment (planned for v0.2.0)
 

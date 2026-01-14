@@ -42,7 +42,7 @@ This section covers monitoring, incident response, and maintenance for ddnsd dep
   - Verification and rollback
 
 - **[Migration](../user/migration.md)** - Version upgrade procedures
-  - v0.1.0 → v0.1.1 upgrade
+  - Version upgrade guides (see Migration Guide)
   - Breaking changes assessment
   - Rollback procedures
 
