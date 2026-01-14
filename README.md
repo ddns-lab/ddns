@@ -92,12 +92,40 @@ ddns/
 └── README.md
 ```
 
-## Documentation
+## 📚 Documentation
 
-- **[`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md)** - Mandatory architectural constraints for all development
-- **[`CLAUDE.md`](CLAUDE.md)** - Comprehensive development guide
-- **[`docs/PHASE_22_VALIDATION.md`](docs/PHASE_22_VALIDATION.md)** - Cloudflare provider validation report
-- **[`.ai/QUICK_START.md`](.ai/QUICK_START.md)** - Quick reference for contributors
+**New to ddns?** Start with [📖 User Guide](docs/user/)
+
+**Need help?** See [🔧 Troubleshooting](docs/user/troubleshooting.md)
+
+**Full documentation**: [docs/README.md](docs/README.md)
+
+### Key Documentation
+
+**User Documentation**:
+- [Installation Guide](docs/user/installation.md) - 3 ways to install ddnsd
+- [Configuration Guide](docs/user/configuration.md) - Complete environment variable reference
+- [Deployment Guide](docs/user/deployment.md) - systemd deployment and verification
+- [Troubleshooting Guide](docs/user/troubleshooting.md) - Common issues and solutions
+- [Migration Guide](docs/user/migration.md) - Version upgrade instructions
+
+**Operations Documentation**:
+- [Crash Recovery](docs/operations/crash-recovery.md) - State corruption and recovery
+- [Observability](docs/operations/observability.md) - Logging, metrics, health checks
+- [Operations](docs/operations/ops.md) - Signal handling and process lifecycle
+- [Secret Rotation](docs/operations/secret-rotation.md) - API token rotation procedures
+- [Monitoring](docs/operations/monitoring.md) - Production monitoring integration
+
+**Architecture & Development**:
+- [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) - **Mandatory** architectural constraints for all development
+- [`CLAUDE.md`](CLAUDE.md) - Comprehensive development guide
+- [Architecture Documentation](docs/architecture/) - System design and boundaries
+- [`.ai/QUICK_START.md`](.ai/QUICK_START.md) - Quick reference for contributors
+
+**Other**:
+- [Security Guide](docs/security/security.md) - Security best practices
+- [Versioning Policy](docs/meta/versioning.md) - Semantic versioning
+- [Changelog](docs/meta/changelog.md) - Complete change history
 
 ## Implementation Status
 
