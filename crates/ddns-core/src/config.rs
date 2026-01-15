@@ -159,6 +159,12 @@ pub enum ProviderConfig {
         access_key_secret: String,
     },
 
+    /// NameSilo DNS provider
+    NameSilo {
+        /// NameSilo API key
+        api_key: String,
+    },
+
     /// Custom provider
     Custom {
         /// Factory name to use
@@ -192,6 +198,12 @@ impl ProviderConfig {
                 }
                 Ok(())
             }
+            ProviderConfig::NameSilo { api_key } => {
+                if api_key.is_empty() {
+                    return Err(crate::Error::config("NameSilo API key cannot be empty"));
+                }
+                Ok(())
+            }
             ProviderConfig::Custom { factory, config } => {
                 if factory.is_empty() {
                     return Err(crate::Error::config(
@@ -213,6 +225,7 @@ impl ProviderConfig {
         match self {
             ProviderConfig::Cloudflare { .. } => "cloudflare",
             ProviderConfig::Aliyun { .. } => "aliyun",
+            ProviderConfig::NameSilo { .. } => "namesilo",
             ProviderConfig::Custom { factory, .. } => factory,
         }
     }

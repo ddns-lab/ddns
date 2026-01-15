@@ -139,11 +139,12 @@ fn print_help() {
     println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
     println!();
     println!("  DNS Provider Configuration:");
-    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun) [default: cloudflare]");
+    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun, namesilo) [default: cloudflare]");
     println!("    DDNS_PROVIDER_API_TOKEN        API token [required for Cloudflare]");
     println!("    DDNS_PROVIDER_ZONE_ID          Zone ID (optional, for Cloudflare)");
     println!("    DDNS_PROVIDER_ACCESS_KEY_ID    AccessKey ID [required for Aliyun]");
     println!("    DDNS_PROVIDER_ACCESS_KEY_SECRET AccessKey Secret [required for Aliyun]");
+    println!("    DDNS_PROVIDER_API_KEY          API key [required for NameSilo]");
     println!();
     println!("  Records:");
     println!("    DDNS_RECORDS             Comma-separated records with optional types");
@@ -275,10 +276,10 @@ impl Config {
 
         // Validate provider type
         match self.provider_type.as_str() {
-            "cloudflare" | "aliyun" => {} // Currently supported
+            "cloudflare" | "aliyun" | "namesilo" => {} // Currently supported
             _ => anyhow::bail!(
                 "DDNS_PROVIDER_TYPE '{}' is not supported. \
-                Supported providers: cloudflare, aliyun",
+                Supported providers: cloudflare, aliyun, namesilo",
                 self.provider_type
             ),
         }
@@ -563,6 +564,12 @@ async fn run_daemon(config: Config) -> Result<()> {
         ddns_provider_aliyun::register(&registry);
     }
 
+    #[cfg(feature = "namesilo")]
+    {
+        info!("Registering NameSilo provider");
+        ddns_provider_namesilo::register(&registry);
+    }
+
     #[cfg(feature = "netlink")]
     {
         info!("Registering Netlink IP source");
@@ -657,6 +664,19 @@ async fn run_daemon(config: Config) -> Result<()> {
                 access_key_id,
                 access_key_secret,
             }
+        }
+        "namesilo" => {
+            // NameSilo uses API key
+            let api_key = env::var("DDNS_PROVIDER_API_KEY")
+                .unwrap_or_else(|_| String::new());
+
+            if api_key.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DDNS_PROVIDER_API_KEY is required for NameSilo provider"
+                ));
+            }
+
+            ProviderConfig::NameSilo { api_key }
         }
         _ => {
             return Err(anyhow::anyhow!(
