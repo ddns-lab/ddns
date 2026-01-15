@@ -139,12 +139,13 @@ fn print_help() {
     println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
     println!();
     println!("  DNS Provider Configuration:");
-    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun, namesilo) [default: cloudflare]");
+    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun, namesilo, godaddy) [default: cloudflare]");
     println!("    DDNS_PROVIDER_API_TOKEN        API token [required for Cloudflare]");
     println!("    DDNS_PROVIDER_ZONE_ID          Zone ID (optional, for Cloudflare)");
     println!("    DDNS_PROVIDER_ACCESS_KEY_ID    AccessKey ID [required for Aliyun]");
     println!("    DDNS_PROVIDER_ACCESS_KEY_SECRET AccessKey Secret [required for Aliyun]");
-    println!("    DDNS_PROVIDER_API_KEY          API key [required for NameSilo]");
+    println!("    DDNS_PROVIDER_API_KEY          API key [required for NameSilo/GoDaddy]");
+    println!("    DDNS_PROVIDER_API_SECRET       API secret [required for GoDaddy]");
     println!();
     println!("  Records:");
     println!("    DDNS_RECORDS             Comma-separated records with optional types");
@@ -276,10 +277,10 @@ impl Config {
 
         // Validate provider type
         match self.provider_type.as_str() {
-            "cloudflare" | "aliyun" | "namesilo" => {} // Currently supported
+            "cloudflare" | "aliyun" | "namesilo" | "godaddy" => {} // Currently supported
             _ => anyhow::bail!(
                 "DDNS_PROVIDER_TYPE '{}' is not supported. \
-                Supported providers: cloudflare, aliyun, namesilo",
+                Supported providers: cloudflare, aliyun, namesilo, godaddy",
                 self.provider_type
             ),
         }
@@ -570,6 +571,12 @@ async fn run_daemon(config: Config) -> Result<()> {
         ddns_provider_namesilo::register(&registry);
     }
 
+    #[cfg(feature = "godaddy")]
+    {
+        info!("Registering GoDaddy provider");
+        ddns_provider_godaddy::register(&registry);
+    }
+
     #[cfg(feature = "netlink")]
     {
         info!("Registering Netlink IP source");
@@ -677,6 +684,29 @@ async fn run_daemon(config: Config) -> Result<()> {
             }
 
             ProviderConfig::NameSilo { api_key }
+        }
+        "godaddy" => {
+            // GoDaddy uses API key and secret
+            let api_key = env::var("DDNS_PROVIDER_API_KEY")
+                .unwrap_or_else(|_| String::new());
+            let api_secret = env::var("DDNS_PROVIDER_API_SECRET")
+                .unwrap_or_else(|_| String::new());
+
+            if api_key.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DDNS_PROVIDER_API_KEY is required for GoDaddy provider"
+                ));
+            }
+            if api_secret.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DDNS_PROVIDER_API_SECRET is required for GoDaddy provider"
+                ));
+            }
+
+            ProviderConfig::GoDaddy {
+                api_key,
+                api_secret,
+            }
         }
         _ => {
             return Err(anyhow::anyhow!(

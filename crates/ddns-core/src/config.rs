@@ -165,6 +165,14 @@ pub enum ProviderConfig {
         api_key: String,
     },
 
+    /// GoDaddy DNS provider
+    GoDaddy {
+        /// GoDaddy API key
+        api_key: String,
+        /// GoDaddy API secret
+        api_secret: String,
+    },
+
     /// Custom provider
     Custom {
         /// Factory name to use
@@ -204,6 +212,15 @@ impl ProviderConfig {
                 }
                 Ok(())
             }
+            ProviderConfig::GoDaddy { api_key, api_secret } => {
+                if api_key.is_empty() {
+                    return Err(crate::Error::config("GoDaddy API key cannot be empty"));
+                }
+                if api_secret.is_empty() {
+                    return Err(crate::Error::config("GoDaddy API secret cannot be empty"));
+                }
+                Ok(())
+            }
             ProviderConfig::Custom { factory, config } => {
                 if factory.is_empty() {
                     return Err(crate::Error::config(
@@ -226,6 +243,7 @@ impl ProviderConfig {
             ProviderConfig::Cloudflare { .. } => "cloudflare",
             ProviderConfig::Aliyun { .. } => "aliyun",
             ProviderConfig::NameSilo { .. } => "namesilo",
+            ProviderConfig::GoDaddy { .. } => "godaddy",
             ProviderConfig::Custom { factory, .. } => factory,
         }
     }

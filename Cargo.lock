@@ -256,6 +256,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ddns-provider-godaddy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "ddns-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
 name = "ddns-provider-namesilo"
 version = "0.1.0"
 dependencies = [
@@ -279,6 +294,7 @@ dependencies = [
  "ddns-ip-netlink",
  "ddns-provider-aliyun",
  "ddns-provider-cloudflare",
+ "ddns-provider-godaddy",
  "ddns-provider-namesilo",
  "tokio",
  "tracing",
