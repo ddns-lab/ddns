@@ -151,6 +151,14 @@ pub enum ProviderConfig {
         account_id: Option<String>,
     },
 
+    /// Aliyun (Alibaba Cloud) DNS provider
+    Aliyun {
+        /// Aliyun AccessKey ID
+        access_key_id: String,
+        /// Aliyun AccessKey Secret
+        access_key_secret: String,
+    },
+
     /// Custom provider
     Custom {
         /// Factory name to use
@@ -167,6 +175,20 @@ impl ProviderConfig {
             ProviderConfig::Cloudflare { api_token, .. } => {
                 if api_token.is_empty() {
                     return Err(crate::Error::config("Cloudflare API token cannot be empty"));
+                }
+                Ok(())
+            }
+            ProviderConfig::Aliyun {
+                access_key_id,
+                access_key_secret,
+            } => {
+                if access_key_id.is_empty() {
+                    return Err(crate::Error::config("Aliyun AccessKey ID cannot be empty"));
+                }
+                if access_key_secret.is_empty() {
+                    return Err(crate::Error::config(
+                        "Aliyun AccessKey Secret cannot be empty",
+                    ));
                 }
                 Ok(())
             }
@@ -190,6 +212,7 @@ impl ProviderConfig {
     pub fn type_name(&self) -> &str {
         match self {
             ProviderConfig::Cloudflare { .. } => "cloudflare",
+            ProviderConfig::Aliyun { .. } => "aliyun",
             ProviderConfig::Custom { factory, .. } => factory,
         }
     }

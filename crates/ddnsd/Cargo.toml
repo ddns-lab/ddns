@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 ddns-core = { path = "../ddns-core" }
 ddns-provider-cloudflare = { path = "../ddns-provider-cloudflare", optional = true }
+ddns-provider-aliyun = { path = "../ddns-provider-aliyun", optional = true }
 ddns-ip-netlink = { path = "../ddns-ip-netlink", optional = true }
 ddns-ip-http = { path = "../ddns-ip-http", optional = true }
 
@@ -25,6 +26,7 @@ anyhow = { workspace = true }
 [features]
 default = ["cloudflare", "netlink"]
 cloudflare = ["dep:ddns-provider-cloudflare"]
+aliyun = ["dep:ddns-provider-aliyun"]
 netlink = ["dep:ddns-ip-netlink"]
 http = ["dep:ddns-ip-http"]
-all = ["cloudflare", "netlink", "http"]
+all = ["cloudflare", "aliyun", "netlink", "http"]

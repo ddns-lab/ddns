@@ -139,9 +139,11 @@ fn print_help() {
     println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
     println!();
     println!("  DNS Provider Configuration:");
-    println!("    DDNS_PROVIDER_TYPE       Provider type (cloudflare) [default: cloudflare]");
-    println!("    DDNS_PROVIDER_API_TOKEN API token [required]");
-    println!("    DDNS_PROVIDER_ZONE_ID    Zone ID (optional)");
+    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun) [default: cloudflare]");
+    println!("    DDNS_PROVIDER_API_TOKEN        API token [required for Cloudflare]");
+    println!("    DDNS_PROVIDER_ZONE_ID          Zone ID (optional, for Cloudflare)");
+    println!("    DDNS_PROVIDER_ACCESS_KEY_ID    AccessKey ID [required for Aliyun]");
+    println!("    DDNS_PROVIDER_ACCESS_KEY_SECRET AccessKey Secret [required for Aliyun]");
     println!();
     println!("  Records:");
     println!("    DDNS_RECORDS             Comma-separated records with optional types");
@@ -273,10 +275,10 @@ impl Config {
 
         // Validate provider type
         match self.provider_type.as_str() {
-            "cloudflare" => {} // Currently supported
+            "cloudflare" | "aliyun" => {} // Currently supported
             _ => anyhow::bail!(
                 "DDNS_PROVIDER_TYPE '{}' is not supported. \
-                Supported providers: cloudflare",
+                Supported providers: cloudflare, aliyun",
                 self.provider_type
             ),
         }
@@ -555,6 +557,12 @@ async fn run_daemon(config: Config) -> Result<()> {
         ddns_provider_cloudflare::register(&registry);
     }
 
+    #[cfg(feature = "aliyun")]
+    {
+        info!("Registering Aliyun provider");
+        ddns_provider_aliyun::register(&registry);
+    }
+
     #[cfg(feature = "netlink")]
     {
         info!("Registering Netlink IP source");
@@ -627,6 +635,29 @@ async fn run_daemon(config: Config) -> Result<()> {
             zone_id: config.provider_zone_id.clone(),
             account_id: None,
         },
+        "aliyun" => {
+            // Aliyun uses AccessKey ID and Secret
+            let access_key_id = env::var("DDNS_PROVIDER_ACCESS_KEY_ID")
+                .unwrap_or_else(|_| String::new());
+            let access_key_secret = env::var("DDNS_PROVIDER_ACCESS_KEY_SECRET")
+                .unwrap_or_else(|_| String::new());
+
+            if access_key_id.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DDNS_PROVIDER_ACCESS_KEY_ID is required for Aliyun provider"
+                ));
+            }
+            if access_key_secret.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DDNS_PROVIDER_ACCESS_KEY_SECRET is required for Aliyun provider"
+                ));
+            }
+
+            ProviderConfig::Aliyun {
+                access_key_id,
+                access_key_secret,
+            }
+        }
         _ => {
             return Err(anyhow::anyhow!(
                 "Unknown provider type: {}",
