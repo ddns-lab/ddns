@@ -55,7 +55,7 @@
 // - List Zones: GET `/zones?name=...`
 
 use async_trait::async_trait;
-use ddns_core::config::ProviderConfig;
+use ddns_core::config::{ProviderConfig, ProviderConfigurable};
 use ddns_core::traits::{DnsProvider, DnsProviderFactory, RecordMetadata, UpdateResult};
 use ddns_core::{Error, Result};
 use serde_json::Value;
@@ -858,42 +858,157 @@ impl DnsProvider for CloudflareProvider {
     }
 }
 
+/// Cloudflare provider configuration handler
+///
+/// This struct implements `ProviderConfigurable` to enable the plugin
+/// architecture. It handles:
+/// - Loading config from `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_ACCOUNT_ID`
+/// - Validating provider-specific configuration
+/// - Creating CloudflareProvider instances from validated config
+///
+/// # Benefits
+///
+/// - **Provider-Specific Env Vars**: Uses `CLOUDFLARE_` prefix, no conflicts
+/// - **Self-Validating**: Validates token presence and format
+/// - **Zero Core Modification**: New providers don't require ddns-core changes
+pub struct CloudflareConfigurable;
+
+impl ProviderConfigurable for CloudflareConfigurable {
+    /// Get provider name
+    fn name(&self) -> &'static str {
+        "cloudflare"
+    }
+
+    /// Load configuration from environment variables
+    ///
+    /// Reads:
+    /// - `CLOUDFLARE_API_TOKEN` (required)
+    /// - `CLOUDFLARE_ZONE_ID` (optional)
+    /// - `CLOUDFLARE_ACCOUNT_ID` (optional)
+    fn load_from_env(&self) -> Result<Value> {
+        let api_token = std::env::var("CLOUDFLARE_API_TOKEN")
+            .map_err(|_| Error::config("CLOUDFLARE_API_TOKEN is required"))?;
+
+        if api_token.is_empty() {
+            return Err(Error::config("CLOUDFLARE_API_TOKEN cannot be empty"));
+        }
+
+        let zone_id = std::env::var("CLOUDFLARE_ZONE_ID").ok();
+        let account_id = std::env::var("CLOUDFLARE_ACCOUNT_ID").ok();
+
+        Ok(serde_json::json!({
+            "api_token": api_token,
+            "zone_id": zone_id,
+            "account_id": account_id,
+        }))
+    }
+
+    /// Validate configuration
+    ///
+    /// Checks that api_token is present and not empty.
+    fn validate(&self, config: &Value) -> Result<()> {
+        let api_token = config
+            .get("api_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_token in configuration"))?;
+
+        if api_token.is_empty() {
+            return Err(Error::config("CLOUDFLARE_API_TOKEN cannot be empty"));
+        }
+
+        Ok(())
+    }
+
+    /// Create provider instance from configuration
+    ///
+    /// # Parameters
+    ///
+    /// - `config`: Configuration JSON with api_token, zone_id, account_id
+    /// - `dry_run`: Whether to run in dry-run mode
+    fn create_provider(
+        &self,
+        config: &Value,
+        dry_run: bool,
+    ) -> Result<Box<dyn DnsProvider>> {
+        let api_token = config
+            .get("api_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_token in configuration"))?;
+
+        let zone_id = config
+            .get("zone_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let account_id = config
+            .get("account_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        Ok(Box::new(CloudflareProvider::new(
+            api_token,
+            zone_id,
+            account_id,
+            dry_run,
+        )))
+    }
+}
+
 /// Factory for creating Cloudflare providers
 pub struct CloudflareFactory;
 
 impl DnsProviderFactory for CloudflareFactory {
     fn create(&self, config: &ProviderConfig) -> Result<Box<dyn DnsProvider>> {
-        match config {
-            ProviderConfig::Cloudflare {
-                api_token,
-                zone_id,
-                account_id,
-            } => {
-                if api_token.is_empty() {
-                    return Err(Error::config("Cloudflare API token is required"));
-                }
-
-                // Check for dry-run mode environment variable
-                let dry_run = std::env::var("DDNS_MODE")
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    == "dry-run";
-
-                if dry_run {
-                    tracing::warn!(
-                        "Cloudflare provider running in DRY-RUN mode - no changes will be made"
-                    );
-                }
-
-                Ok(Box::new(CloudflareProvider::new(
-                    api_token.clone(),
-                    zone_id.clone(),
-                    account_id.clone(),
-                    dry_run,
-                )))
-            }
-            _ => Err(Error::config("Invalid config for Cloudflare provider")),
+        // Check if this is a Cloudflare provider config
+        if config.provider_type != "cloudflare" {
+            return Err(Error::config(format!(
+                "Invalid config for Cloudflare provider: got {}",
+                config.provider_type
+            )));
         }
+
+        // Extract api_token from config
+        let api_token = config
+            .config
+            .get("api_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Cloudflare API token is required"))?;
+
+        if api_token.is_empty() {
+            return Err(Error::config("Cloudflare API token is required"));
+        }
+
+        // Extract optional fields
+        let zone_id = config
+            .config
+            .get("zone_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let account_id = config
+            .config
+            .get("account_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Check for dry-run mode environment variable
+        let dry_run = std::env::var("DDNS_MODE")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "dry-run";
+
+        if dry_run {
+            tracing::warn!(
+                "Cloudflare provider running in DRY-RUN mode - no changes will be made"
+            );
+        }
+
+        Ok(Box::new(CloudflareProvider::new(
+            api_token,
+            zone_id,
+            account_id,
+            dry_run,
+        )))
     }
 }
 
@@ -907,11 +1022,15 @@ impl DnsProviderFactory for CloudflareFactory {
 /// ```rust
 /// use ddns_core::ProviderRegistry;
 ///
-/// let mut registry = ProviderRegistry::new();
+/// let registry = ProviderRegistry::new();
 /// ddns_provider_cloudflare::register(&registry);
 /// ```
 pub fn register(registry: &ddns_core::ProviderRegistry) {
+    // Register legacy factory (for backward compatibility)
     registry.register_provider("cloudflare", Box::new(CloudflareFactory));
+
+    // Register new configurable (recommended approach)
+    registry.register_provider_configurable(Box::new(CloudflareConfigurable));
 }
 
 #[cfg(test)]
@@ -922,10 +1041,13 @@ mod tests {
     fn test_factory_creation() {
         let factory = CloudflareFactory;
 
-        let config = ProviderConfig::Cloudflare {
-            api_token: "test_token".to_string(),
-            zone_id: Some("test_zone".to_string()),
-            account_id: None,
+        let config = ProviderConfig {
+            provider_type: "cloudflare".to_string(),
+            config: serde_json::json!({
+                "api_token": "test_token",
+                "zone_id": "test_zone",
+                "account_id": null,
+            }),
         };
 
         let provider = factory.create(&config);
@@ -936,10 +1058,11 @@ mod tests {
     fn test_factory_missing_token() {
         let factory = CloudflareFactory;
 
-        let config = ProviderConfig::Cloudflare {
-            api_token: "".to_string(),
-            zone_id: None,
-            account_id: None,
+        let config = ProviderConfig {
+            provider_type: "cloudflare".to_string(),
+            config: serde_json::json!({
+                "api_token": "",
+            }),
         };
 
         let provider = factory.create(&config);

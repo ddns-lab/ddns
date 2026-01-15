@@ -51,7 +51,7 @@
 // - dnsAddRecord: Add a new DNS record
 
 use async_trait::async_trait;
-use ddns_core::config::ProviderConfig;
+use ddns_core::config::{ProviderConfig, ProviderConfigurable};
 use ddns_core::traits::{DnsProvider, DnsProviderFactory, UpdateResult};
 use ddns_core::{Error, Result};
 use serde_json::Value;
@@ -693,36 +693,108 @@ impl DnsProvider for NameSiloProvider {
     }
 }
 
+/// NameSilo provider configuration handler
+///
+/// This struct implements `ProviderConfigurable` to enable the plugin
+/// architecture. It handles:
+/// - Loading config from `NAMESILO_API_KEY`
+/// - Validating provider-specific configuration
+/// - Creating NameSiloProvider instances from validated config
+///
+/// # Benefits
+///
+/// - **Provider-Specific Env Vars**: Uses `NAMESILO_` prefix, no conflicts
+/// - **Self-Validating**: Validates API key presence
+/// - **Zero Core Modification**: New providers don't require ddns-core changes
+pub struct NameSiloConfigurable;
+
+impl ProviderConfigurable for NameSiloConfigurable {
+    fn name(&self) -> &'static str {
+        "namesilo"
+    }
+
+    fn load_from_env(&self) -> Result<Value> {
+        let api_key = std::env::var("NAMESILO_API_KEY")
+            .map_err(|_| Error::config("NAMESILO_API_KEY is required"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("NAMESILO_API_KEY cannot be empty"));
+        }
+
+        Ok(serde_json::json!({
+            "api_key": api_key,
+        }))
+    }
+
+    fn validate(&self, config: &Value) -> Result<()> {
+        let api_key = config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_key in configuration"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("NAMESILO_API_KEY cannot be empty"));
+        }
+
+        Ok(())
+    }
+
+    fn create_provider(
+        &self,
+        config: &Value,
+        dry_run: bool,
+    ) -> Result<Box<dyn DnsProvider>> {
+        let api_key = config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_key in configuration"))?;
+
+        Ok(Box::new(NameSiloProvider::new(api_key, dry_run)))
+    }
+}
+
 /// Factory for creating NameSilo providers
 pub struct NameSiloFactory;
 
 impl DnsProviderFactory for NameSiloFactory {
     fn create(&self, config: &ProviderConfig) -> Result<Box<dyn DnsProvider>> {
-        match config {
-            ProviderConfig::NameSilo { api_key } => {
-                if api_key.is_empty() {
-                    return Err(Error::config("NameSilo API key is required"));
-                }
-
-                let dry_run = std::env::var("DDNS_MODE")
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    == "dry-run";
-
-                if dry_run {
-                    tracing::warn!("{} provider running in DRY-RUN mode", "namesilo");
-                }
-
-                Ok(Box::new(NameSiloProvider::new(api_key.clone(), dry_run)))
-            }
-            _ => Err(Error::config("Invalid config for NameSilo provider")),
+        if config.provider_type != "namesilo" {
+            return Err(Error::config(format!(
+                "Invalid config for NameSilo provider: got {}",
+                config.provider_type
+            )));
         }
+
+        let api_key = config
+            .config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("NameSilo API key is required"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("NameSilo API key is required"));
+        }
+
+        let dry_run = std::env::var("DDNS_MODE")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "dry-run";
+
+        if dry_run {
+            tracing::warn!("{} provider running in DRY-RUN mode", "namesilo");
+        }
+
+        Ok(Box::new(NameSiloProvider::new(api_key, dry_run)))
     }
 }
 
 /// Register the NameSilo provider with a registry
 pub fn register(registry: &ddns_core::ProviderRegistry) {
+    // Register legacy factory (for backward compatibility)
     registry.register_provider("namesilo", Box::new(NameSiloFactory));
+
+    // Register new configurable (recommended approach)
+    registry.register_provider_configurable(Box::new(NameSiloConfigurable));
 }
 
 #[cfg(test)]

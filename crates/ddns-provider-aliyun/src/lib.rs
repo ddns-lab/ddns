@@ -52,7 +52,7 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
-use ddns_core::config::ProviderConfig;
+use ddns_core::config::{ProviderConfig, ProviderConfigurable};
 use ddns_core::traits::{DnsProvider, DnsProviderFactory, RecordMetadata, UpdateResult};
 use ddns_core::{Error, Result};
 use hmac::{Hmac, Mac};
@@ -815,43 +815,157 @@ impl DnsProvider for AliyunProvider {
     }
 }
 
+/// Aliyun provider configuration handler
+///
+/// This struct implements `ProviderConfigurable` to enable the plugin
+/// architecture. It handles:
+/// - Loading config from `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`
+/// - Validating provider-specific configuration
+/// - Creating AliyunProvider instances from validated config
+///
+/// # Benefits
+///
+/// - **Provider-Specific Env Vars**: Uses `ALIYUN_` prefix, no conflicts
+/// - **Self-Validating**: Validates credentials presence
+/// - **Zero Core Modification**: New providers don't require ddns-core changes
+pub struct AliyunConfigurable;
+
+impl ProviderConfigurable for AliyunConfigurable {
+    /// Get provider name
+    fn name(&self) -> &'static str {
+        "aliyun"
+    }
+
+    /// Load configuration from environment variables
+    ///
+    /// Reads:
+    /// - `ALIYUN_ACCESS_KEY_ID` (required)
+    /// - `ALIYUN_ACCESS_KEY_SECRET` (required)
+    fn load_from_env(&self) -> Result<Value> {
+        let access_key_id = std::env::var("ALIYUN_ACCESS_KEY_ID")
+            .map_err(|_| Error::config("ALIYUN_ACCESS_KEY_ID is required"))?;
+
+        let access_key_secret = std::env::var("ALIYUN_ACCESS_KEY_SECRET")
+            .map_err(|_| Error::config("ALIYUN_ACCESS_KEY_SECRET is required"))?;
+
+        if access_key_id.is_empty() {
+            return Err(Error::config("ALIYUN_ACCESS_KEY_ID cannot be empty"));
+        }
+
+        if access_key_secret.is_empty() {
+            return Err(Error::config("ALIYUN_ACCESS_KEY_SECRET cannot be empty"));
+        }
+
+        Ok(serde_json::json!({
+            "access_key_id": access_key_id,
+            "access_key_secret": access_key_secret,
+        }))
+    }
+
+    /// Validate configuration
+    ///
+    /// Checks that access_key_id and access_key_secret are present and not empty.
+    fn validate(&self, config: &Value) -> Result<()> {
+        let access_key_id = config
+            .get("access_key_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing access_key_id in configuration"))?;
+
+        let access_key_secret = config
+            .get("access_key_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing access_key_secret in configuration"))?;
+
+        if access_key_id.is_empty() {
+            return Err(Error::config("ALIYUN_ACCESS_KEY_ID cannot be empty"));
+        }
+
+        if access_key_secret.is_empty() {
+            return Err(Error::config("ALIYUN_ACCESS_KEY_SECRET cannot be empty"));
+        }
+
+        Ok(())
+    }
+
+    /// Create provider instance from configuration
+    ///
+    /// # Parameters
+    ///
+    /// - `config`: Configuration JSON with access_key_id, access_key_secret
+    /// - `dry_run`: Whether to run in dry-run mode
+    fn create_provider(
+        &self,
+        config: &Value,
+        dry_run: bool,
+    ) -> Result<Box<dyn DnsProvider>> {
+        let access_key_id = config
+            .get("access_key_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing access_key_id in configuration"))?;
+
+        let access_key_secret = config
+            .get("access_key_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing access_key_secret in configuration"))?;
+
+        Ok(Box::new(AliyunProvider::new(
+            access_key_id,
+            access_key_secret,
+            dry_run,
+        )))
+    }
+}
+
 /// Factory for creating Aliyun providers
 pub struct AliyunFactory;
 
 impl DnsProviderFactory for AliyunFactory {
     fn create(&self, config: &ProviderConfig) -> Result<Box<dyn DnsProvider>> {
-        match config {
-            ProviderConfig::Aliyun {
-                access_key_id,
-                access_key_secret,
-            } => {
-                if access_key_id.is_empty() {
-                    return Err(Error::config("Aliyun AccessKey ID is required"));
-                }
-                if access_key_secret.is_empty() {
-                    return Err(Error::config("Aliyun AccessKey Secret is required"));
-                }
-
-                // Check for dry-run mode environment variable
-                let dry_run = std::env::var("DDNS_MODE")
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    == "dry-run";
-
-                if dry_run {
-                    tracing::warn!(
-                        "Aliyun provider running in DRY-RUN mode - no changes will be made"
-                    );
-                }
-
-                Ok(Box::new(AliyunProvider::new(
-                    access_key_id.clone(),
-                    access_key_secret.clone(),
-                    dry_run,
-                )))
-            }
-            _ => Err(Error::config("Invalid config for Aliyun provider")),
+        // Check if this is an Aliyun provider config
+        if config.provider_type != "aliyun" {
+            return Err(Error::config(format!(
+                "Invalid config for Aliyun provider: got {}",
+                config.provider_type
+            )));
         }
+
+        // Extract access_key_id from config
+        let access_key_id = config
+            .config
+            .get("access_key_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Aliyun AccessKey ID is required"))?;
+
+        let access_key_secret = config
+            .config
+            .get("access_key_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Aliyun AccessKey Secret is required"))?;
+
+        if access_key_id.is_empty() {
+            return Err(Error::config("Aliyun AccessKey ID is required"));
+        }
+        if access_key_secret.is_empty() {
+            return Err(Error::config("Aliyun AccessKey Secret is required"));
+        }
+
+        // Check for dry-run mode environment variable
+        let dry_run = std::env::var("DDNS_MODE")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "dry-run";
+
+        if dry_run {
+            tracing::warn!(
+                "Aliyun provider running in DRY-RUN mode - no changes will be made"
+            );
+        }
+
+        Ok(Box::new(AliyunProvider::new(
+            access_key_id,
+            access_key_secret,
+            dry_run,
+        )))
     }
 }
 
@@ -869,7 +983,11 @@ impl DnsProviderFactory for AliyunFactory {
 /// ddns_provider_aliyun::register(&registry);
 /// ```
 pub fn register(registry: &ddns_core::ProviderRegistry) {
+    // Register legacy factory (for backward compatibility)
     registry.register_provider("aliyun", Box::new(AliyunFactory));
+
+    // Register new configurable (recommended approach)
+    registry.register_provider_configurable(Box::new(AliyunConfigurable));
 }
 
 #[cfg(test)]

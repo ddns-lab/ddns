@@ -37,7 +37,7 @@
 //! }
 //! ```
 
-use crate::config::{IpSourceConfig, ProviderConfig};
+use crate::config::{IpSourceConfig, ProviderConfig, ProviderConfigurable};
 use crate::error::{Error, Result};
 use crate::traits::{DnsProvider, IpSource, StateStore};
 use crate::traits::{DnsProviderFactory, IpSourceFactory, StateStoreFactory};
@@ -53,10 +53,31 @@ use std::sync::RwLock;
 ///
 /// The registry uses interior mutability with RwLock, allowing concurrent
 /// reads and exclusive writes.
+///
+/// ## Plugin Architecture
+///
+/// The registry supports two registration mechanisms:
+///
+/// 1. **DnsProviderFactory**: Legacy factory pattern (still supported)
+/// 2. **ProviderConfigurable**: New plugin pattern with env var loading
+///
+/// The new pattern is recommended as it eliminates the need to modify
+/// ddns-core when adding new providers.
 #[derive(Default)]
 pub struct ProviderRegistry {
-    /// Registered DNS provider factories
+    /// Registered DNS provider factories (legacy)
     providers: RwLock<HashMap<String, Box<dyn DnsProviderFactory>>>,
+
+    /// Registered provider configurables (new plugin pattern)
+    ///
+    /// Each provider can register a `ProviderConfigurable` implementation
+    /// that handles:
+    /// - Loading config from environment variables (provider-specific prefixes)
+    /// - Validating provider-specific configuration
+    /// - Creating provider instances from validated config
+    ///
+    /// This enables zero-modification provider addition.
+    configurables: RwLock<HashMap<String, Box<dyn ProviderConfigurable>>>,
 
     /// Registered IP source factories
     ip_sources: RwLock<HashMap<String, Box<dyn IpSourceFactory>>>,
@@ -122,6 +143,142 @@ impl ProviderRegistry {
         let name = name.into();
         let mut stores = self.state_stores.write().unwrap();
         stores.insert(name, std::sync::Arc::from(factory));
+    }
+
+    /// Register a provider with its configuration trait
+    ///
+    /// This is the recommended registration method for new providers.
+    /// The registry will use the provider's `ProviderConfigurable`
+    /// implementation to:
+    /// - Load configuration from environment variables (with provider-specific prefixes)
+    /// - Validate provider-specific configuration
+    /// - Create provider instances from validated config
+    ///
+    /// # Parameters
+    ///
+    /// - `configurable`: Provider's configuration handler
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use ddns_core::registry::ProviderRegistry;
+    /// # use ddns_core::config::ProviderConfigurable;
+    /// # struct CloudflareConfigurable;
+    /// # impl ProviderConfigurable for CloudflareConfigurable {
+    /// #     fn load_from_env() -> Result<serde_json::Value, ddns_core::Error> { unimplemented!() }
+    /// #     fn validate(config: &serde_json::Value) -> Result<(), ddns_core::Error> { unimplemented!() }
+    /// #     fn create_provider(config: &serde_json::Value, dry_run: bool) -> Result<Box<dyn ddns_core::DnsProvider>, ddns_core::Error> { unimplemented!() }
+    /// #     fn provider_name() -> &'static str { "cloudflare" }
+    /// # }
+    /// let registry = ProviderRegistry::new();
+    /// registry.register_provider_configurable(Box::new(CloudflareConfigurable));
+    /// ```
+    ///
+    /// # Benefits
+    ///
+    /// - **Zero Modification**: New providers don't require ddns-core changes
+    /// - **Provider-Specific Env Vars**: Each provider uses unique env var prefixes
+    /// - **Self-Validating**: Providers validate their own configuration
+    pub fn register_provider_configurable(&self, configurable: Box<dyn ProviderConfigurable>) {
+        let name = configurable.name();
+        let mut configurables = self.configurables.write().unwrap();
+        configurables.insert(name.to_string(), configurable);
+    }
+
+    /// Load provider configuration from environment variables
+    ///
+    /// This method calls the provider's `load_from_env()` implementation,
+    /// which reads provider-specific environment variables (e.g.,
+    /// `CLOUDFLARE_API_TOKEN`, `ALIYUN_ACCESS_KEY_ID`, etc.).
+    ///
+    /// # Parameters
+    ///
+    /// - `provider_type`: Provider name (e.g., "cloudflare", "aliyun")
+    ///
+    /// # Returns
+    ///
+    /// Provider configuration data as JSON
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Provider type is not registered
+    /// - Required environment variables are missing
+    /// - Environment variables are invalid
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use ddns_core::registry::ProviderRegistry;
+    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let registry = ProviderRegistry::new();
+    /// let config = registry.load_provider_config("cloudflare")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn load_provider_config(&self, provider_type: &str) -> Result<serde_json::Value> {
+        let configurables = self.configurables.read().unwrap();
+
+        let configurable = configurables
+            .get(provider_type)
+            .ok_or_else(|| Error::config(format!("Unknown provider type: {}", provider_type)))?;
+
+        configurable.load_from_env()
+    }
+
+    /// Create provider instance from configuration data
+    ///
+    /// This method validates the configuration and creates a provider instance.
+    /// It uses the provider's `ProviderConfigurable` implementation.
+    ///
+    /// # Parameters
+    ///
+    /// - `provider_type`: Provider name (e.g., "cloudflare", "aliyun")
+    /// - `config`: Configuration data (typically from `load_provider_config()`)
+    /// - `dry_run`: Whether to run in dry-run mode
+    ///
+    /// # Returns
+    ///
+    /// Boxed DnsProvider trait object
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - Provider type is not registered
+    /// - Configuration is invalid
+    /// - Provider creation fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use ddns_core::registry::ProviderRegistry;
+    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let registry = ProviderRegistry::new();
+    /// // Load config from environment
+    /// let config = registry.load_provider_config("cloudflare")?;
+    ///
+    /// // Create provider instance
+    /// let provider = registry.create_provider_from_config("cloudflare", &config, false)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn create_provider_from_config(
+        &self,
+        provider_type: &str,
+        config: &serde_json::Value,
+        dry_run: bool,
+    ) -> Result<Box<dyn DnsProvider>> {
+        let configurables = self.configurables.read().unwrap();
+
+        let configurable = configurables
+            .get(provider_type)
+            .ok_or_else(|| Error::config(format!("Unknown provider type: {}", provider_type)))?;
+
+        // Validate configuration
+        configurable.validate(config)?;
+
+        // Create provider instance
+        configurable.create_provider(config, dry_run)
     }
 
     /// Create a DNS provider from configuration

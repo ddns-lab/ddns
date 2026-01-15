@@ -642,78 +642,21 @@ async fn run_daemon(config: Config) -> Result<()> {
         }
     };
 
-    // Create provider config
-    let provider_config = match config.provider_type.as_str() {
-        "cloudflare" => ProviderConfig::Cloudflare {
-            api_token: config.provider_api_token.clone(),
-            zone_id: config.provider_zone_id.clone(),
-            account_id: None,
-        },
-        "aliyun" => {
-            // Aliyun uses AccessKey ID and Secret
-            let access_key_id = env::var("DDNS_PROVIDER_ACCESS_KEY_ID")
-                .unwrap_or_else(|_| String::new());
-            let access_key_secret = env::var("DDNS_PROVIDER_ACCESS_KEY_SECRET")
-                .unwrap_or_else(|_| String::new());
+    // Create provider config using the new plugin architecture
+    //
+    // The registry's load_provider_config() method calls the provider's
+    // ProviderConfigurable implementation, which reads provider-specific
+    // environment variables (e.g., CLOUDFLARE_API_TOKEN, ALIYUN_ACCESS_KEY_ID).
+    //
+    // This eliminates environment variable naming conflicts and makes adding
+    // new providers much simpler - no need to modify this code!
+    let provider_config_data = registry
+        .load_provider_config(&config.provider_type)
+        .map_err(|e| anyhow::anyhow!("Failed to load provider config: {}", e))?;
 
-            if access_key_id.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "DDNS_PROVIDER_ACCESS_KEY_ID is required for Aliyun provider"
-                ));
-            }
-            if access_key_secret.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "DDNS_PROVIDER_ACCESS_KEY_SECRET is required for Aliyun provider"
-                ));
-            }
-
-            ProviderConfig::Aliyun {
-                access_key_id,
-                access_key_secret,
-            }
-        }
-        "namesilo" => {
-            // NameSilo uses API key
-            let api_key = env::var("DDNS_PROVIDER_API_KEY")
-                .unwrap_or_else(|_| String::new());
-
-            if api_key.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "DDNS_PROVIDER_API_KEY is required for NameSilo provider"
-                ));
-            }
-
-            ProviderConfig::NameSilo { api_key }
-        }
-        "godaddy" => {
-            // GoDaddy uses API key and secret
-            let api_key = env::var("DDNS_PROVIDER_API_KEY")
-                .unwrap_or_else(|_| String::new());
-            let api_secret = env::var("DDNS_PROVIDER_API_SECRET")
-                .unwrap_or_else(|_| String::new());
-
-            if api_key.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "DDNS_PROVIDER_API_KEY is required for GoDaddy provider"
-                ));
-            }
-            if api_secret.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "DDNS_PROVIDER_API_SECRET is required for GoDaddy provider"
-                ));
-            }
-
-            ProviderConfig::GoDaddy {
-                api_key,
-                api_secret,
-            }
-        }
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unknown provider type: {}",
-                config.provider_type
-            ));
-        }
+    let provider_config = ProviderConfig {
+        provider_type: config.provider_type.clone(),
+        config: provider_config_data,
     };
 
     // Create state store config
@@ -783,7 +726,24 @@ async fn run_daemon(config: Config) -> Result<()> {
 
     // Create components from registry
     let ip_source = registry.create_ip_source(&ddns_config.ip_source)?;
-    let provider = registry.create_provider(&ddns_config.provider)?;
+
+    // Create provider using the new plugin architecture
+    //
+    // The registry's create_provider_from_config() method validates the
+    // configuration and calls the provider's ProviderConfigurable implementation
+    // to create the provider instance. This ensures all providers follow the
+    // same validation and creation pattern.
+    let dry_run = env::var("DDNS_MODE")
+        .unwrap_or_default()
+        .to_lowercase()
+        == "dry-run";
+
+    let provider = registry.create_provider_from_config(
+        &ddns_config.provider.provider_type,
+        &ddns_config.provider.config,
+        dry_run,
+    )?;
+
     let state_store = registry
         .create_state_store(&ddns_config.state_store)
         .await?;

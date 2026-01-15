@@ -51,7 +51,7 @@
 // - POST /v1/domains/{domain}/records - Add DNS record
 
 use async_trait::async_trait;
-use ddns_core::config::ProviderConfig;
+use ddns_core::config::{ProviderConfig, ProviderConfigurable};
 use ddns_core::traits::{DnsProvider, DnsProviderFactory, UpdateResult};
 use ddns_core::{Error, Result};
 use serde_json::Value;
@@ -522,43 +522,147 @@ impl DnsProvider for GoDaddyProvider {
     }
 }
 
+/// GoDaddy provider configuration handler
+///
+/// This struct implements `ProviderConfigurable` to enable the plugin
+/// architecture. It handles:
+/// - Loading config from `GODADDY_API_KEY`, `GODADDY_API_SECRET`
+/// - Validating provider-specific configuration
+/// - Creating GoDaddyProvider instances from validated config
+///
+/// # Benefits
+///
+/// - **Provider-Specific Env Vars**: Uses `GODADDY_` prefix, no conflicts
+/// - **Self-Validating**: validates credentials presence
+/// - **Zero Core Modification**: New providers don't require ddns-core changes
+pub struct GoDaddyConfigurable;
+
+impl ProviderConfigurable for GoDaddyConfigurable {
+    fn name(&self) -> &'static str {
+        "godaddy"
+    }
+
+    fn load_from_env(&self) -> Result<Value> {
+        let api_key = std::env::var("GODADDY_API_KEY")
+            .map_err(|_| Error::config("GODADDY_API_KEY is required"))?;
+
+        let api_secret = std::env::var("GODADDY_API_SECRET")
+            .map_err(|_| Error::config("GODADDY_API_SECRET is required"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("GODADDY_API_KEY cannot be empty"));
+        }
+
+        if api_secret.is_empty() {
+            return Err(Error::config("GODADDY_API_SECRET cannot be empty"));
+        }
+
+        Ok(serde_json::json!({
+            "api_key": api_key,
+            "api_secret": api_secret,
+        }))
+    }
+
+    fn validate(&self, config: &Value) -> Result<()> {
+        let api_key = config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_key in configuration"))?;
+
+        let api_secret = config
+            .get("api_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_secret in configuration"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("GODADDY_API_KEY cannot be empty"));
+        }
+
+        if api_secret.is_empty() {
+            return Err(Error::config("GODADDY_API_SECRET cannot be empty"));
+        }
+
+        Ok(())
+    }
+
+    fn create_provider(
+        &self,
+        config: &Value,
+        dry_run: bool,
+    ) -> Result<Box<dyn DnsProvider>> {
+        let api_key = config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_key in configuration"))?;
+
+        let api_secret = config
+            .get("api_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("Missing api_secret in configuration"))?;
+
+        Ok(Box::new(GoDaddyProvider::new(
+            api_key,
+            api_secret,
+            dry_run,
+        )))
+    }
+}
+
 /// Factory for creating GoDaddy providers
 pub struct GoDaddyFactory;
 
 impl DnsProviderFactory for GoDaddyFactory {
     fn create(&self, config: &ProviderConfig) -> Result<Box<dyn DnsProvider>> {
-        match config {
-            ProviderConfig::GoDaddy { api_key, api_secret } => {
-                if api_key.is_empty() {
-                    return Err(Error::config("GoDaddy API key is required"));
-                }
-                if api_secret.is_empty() {
-                    return Err(Error::config("GoDaddy API secret is required"));
-                }
-
-                let dry_run = std::env::var("DDNS_MODE")
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    == "dry-run";
-
-                if dry_run {
-                    tracing::warn!("{} provider running in DRY-RUN mode", "godaddy");
-                }
-
-                Ok(Box::new(GoDaddyProvider::new(
-                    api_key.clone(),
-                    api_secret.clone(),
-                    dry_run,
-                )))
-            }
-            _ => Err(Error::config("Invalid config for GoDaddy provider")),
+        if config.provider_type != "godaddy" {
+            return Err(Error::config(format!(
+                "Invalid config for GoDaddy provider: got {}",
+                config.provider_type
+            )));
         }
+
+        let api_key = config
+            .config
+            .get("api_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("GoDaddy API key is required"))?;
+
+        let api_secret = config
+            .config
+            .get("api_secret")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::config("GoDaddy API secret is required"))?;
+
+        if api_key.is_empty() {
+            return Err(Error::config("GoDaddy API key is required"));
+        }
+        if api_secret.is_empty() {
+            return Err(Error::config("GoDaddy API secret is required"));
+        }
+
+        let dry_run = std::env::var("DDNS_MODE")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "dry-run";
+
+        if dry_run {
+            tracing::warn!("{} provider running in DRY-RUN mode", "godaddy");
+        }
+
+        Ok(Box::new(GoDaddyProvider::new(
+            api_key,
+            api_secret,
+            dry_run,
+        )))
     }
 }
 
 /// Register the GoDaddy provider with a registry
 pub fn register(registry: &ddns_core::ProviderRegistry) {
+    // Register legacy factory (for backward compatibility)
     registry.register_provider("godaddy", Box::new(GoDaddyFactory));
+
+    // Register new configurable (recommended approach)
+    registry.register_provider_configurable(Box::new(GoDaddyConfigurable));
 }
 
 #[cfg(test)]

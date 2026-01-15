@@ -181,10 +181,13 @@ async fn main() -> Result<()> {
             interface: None,
             version: None,
         },
-        provider: ddns_core::config::ProviderConfig::Cloudflare {
-            api_token: "test-token".to_string(),
-            zone_id: None,
-            account_id: None,
+        provider: ddns_core::config::ProviderConfig {
+            provider_type: "cloudflare".to_string(),
+            config: serde_json::json!({
+                "api_token": "test-token",
+                "zone_id": null,
+                "account_id": null,
+            }),
         },
         state_store: ddns_core::config::StateStoreConfig::Memory,
         records: vec![RecordConfig::new("example.com")],
