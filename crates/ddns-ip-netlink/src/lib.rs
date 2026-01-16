@@ -17,7 +17,7 @@
 use ddns_core::config::IpSourceConfig;
 
 #[cfg(target_os = "linux")]
-use ddns_core::config::IpVersion as ConfigIpVersion;
+pub use ddns_core::config::IpVersion as ConfigIpVersion;
 
 #[cfg(target_os = "linux")]
 use ddns_core::traits::{IpChangeEvent, IpSource, IpSourceFactory, IpVersion as TraitsIpVersion};

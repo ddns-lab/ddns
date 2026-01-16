@@ -20,6 +20,8 @@
 
 #![cfg(target_os = "linux")]
 
+use ddns_core::traits::ip_source::IpChangeEvent;
+use ddns_core::traits::ip_source::IpSource;
 use ddns_ip_netlink::NetlinkIpSource;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::process::Command;
@@ -148,7 +150,7 @@ async fn real_netlink_creates_socket_and_receives_events() {
         .expect("set new IP succeeds");
 
     // Wait for event
-    let event = tokio::time::timeout(
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
         Duration::from_secs(5),
         stream.next()
     ).await;
@@ -195,7 +197,7 @@ async fn real_netlink_filters_specific_interface() {
         .expect("set new IP on second interface succeeds");
 
     // Wait for event (should only get event from TEST_INTERFACE)
-    let event = tokio::time::timeout(
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
         Duration::from_secs(3),
         stream.next()
     ).await;
@@ -280,7 +282,7 @@ async fn real_netlink_ipv4_changes_trigger_events() {
         .expect("set IPv4 succeeds");
 
     // Wait for event
-    let event = tokio::time::timeout(
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
         Duration::from_secs(5),
         stream.next()
     ).await;
@@ -310,7 +312,7 @@ async fn real_netlink_ipv6_changes_trigger_events() {
         .expect("set IPv6 succeeds");
 
     // Wait for event
-    let event = tokio::time::timeout(
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
         Duration::from_secs(5),
         stream.next()
     ).await;
@@ -367,7 +369,7 @@ async fn real_netlink_current_returns_valid_ip() {
     let source = NetlinkIpSource::new(Some(TEST_INTERFACE.to_string()), None);
 
     // Get current IP
-    let ip = source.current().await;
+    let ip: Result<IpAddr, ddns_core::Error> = source.current().await;
 
     teardown();
 
