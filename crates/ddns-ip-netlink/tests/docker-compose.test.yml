@@ -1,0 +1,33 @@
+version: '3.8'
+
+# Docker Compose configuration for netlink integration tests
+#
+# Usage:
+#   Build:  docker-compose -f docker-compose.test.yml build
+#   Run:    docker-compose -f docker-compose.test.yml run --rm netlink-test
+#   Clean:  docker-compose -f docker-compose.test.yml down
+
+services:
+  netlink-test:
+    build:
+      context: ../..
+      dockerfile: crates/ddns-ip-netlink/tests/Dockerfile.test
+
+    # Privileged mode required for network interface manipulation
+    privileged: true
+
+    # Use host network namespace for netlink socket access
+    network_mode: host
+
+    environment:
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+
+    # Override command to run specific test
+    # Example: command: /bin/bash -c "./ddns-ip-netlink-* real_netlink_creates_socket_and_receives_events --ignored"
+    command: /bin/bash -c "for test in ddns-ip-netlink-*; do echo \"Running $$test...\" && ./$$test --ignored || exit 1; done"
+
+    # Keep container running for debugging
+    # Uncomment to keep container alive for manual inspection
+    # tty: true
+    # stdin_open: true

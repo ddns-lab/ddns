@@ -284,10 +284,9 @@ pub fn minimal_config(record_name: &str) -> ddns_core::config::DdnsConfig {
             interface: None,
             version: None,
         },
-        provider: ddns_core::config::ProviderConfig::Cloudflare {
-            api_token: "test-token".to_string(),
-            zone_id: None,
-            account_id: None,
+        provider: ddns_core::config::ProviderConfig {
+            provider_type: "mock".to_string(),
+            config: serde_json::json!({}),
         },
         state_store: ddns_core::config::StateStoreConfig::Memory,
         records: vec![ddns_core::config::RecordConfig::new(record_name)],
