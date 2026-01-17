@@ -310,12 +310,12 @@ impl AliyunProvider {
         );
 
         // Build API parameters
-        // Note: When using SubDomain (full subdomain), we don't need to pass DomainName
-        // Aliyun API will automatically extract the domain from the subdomain
+        // Aliyun DescribeDomainRecords API requires DomainName
+        // We'll filter by Type and then find the matching record in the response
         let url = self.build_api_url(
             "DescribeDomainRecords",
             &[
-                ("SubDomain", record_name),  // Full subdomain record
+                ("DomainName", &domain_name),
                 ("Type", record_type),
             ],
         );
@@ -396,10 +396,22 @@ impl AliyunProvider {
             )
         })?;
 
-        let record = records.first().ok_or_else(|| {
+        // Extract RR (host record) from record_name for matching
+        // For "ddns-test.warzone.cn": RR = "ddns-test"
+        let parts: Vec<&str> = record_name.split('.').collect();
+        let expected_rr = if parts.len() > 2 {
+            parts[..parts.len() - 2].join(".")
+        } else {
+            "@".to_string()
+        };
+
+        // Find the record that matches our record_name (by RR field)
+        let record = records.iter().find(|r| {
+            r["RR"].as_str().map_or(false, |rr| rr == expected_rr)
+        }).ok_or_else(|| {
             Error::not_found(format!(
-                "DNS record not found: {} (type: {})",
-                record_name, record_type
+                "DNS record not found: {} (type: {}, looking for RR={})",
+                record_name, record_type, expected_rr
             ))
         })?;
 
