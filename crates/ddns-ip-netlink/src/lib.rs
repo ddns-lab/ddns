@@ -396,15 +396,28 @@ impl IpSource for NetlinkIpSource {
                                 if now.duration_since(last_event) > debounce_duration {
                                     // Re-query all IPs
                                     if let Ok(addrs) = temp_source.query_addresses_proc() {
-                                        let mut new_v4: Option<IpAddr> = None;
-                                        let mut new_v6: Option<IpAddr> = None;
-
-                                        for addr in addrs {
-                                            match addr {
-                                                IpAddr::V4(_) => new_v4 = Some(addr),
-                                                IpAddr::V6(_) => new_v6 = Some(addr),
+                                        // Select IPv4 and IPv6 using the same logic as current()
+                                        let new_v4 = match temp_source.version {
+                                            Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
+                                                addrs
+                                                    .iter()
+                                                    .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
+                                                    .or_else(|| addrs.iter().find(|ip| ip.is_ipv4()))
+                                                    .copied()
                                             }
-                                        }
+                                            Some(ConfigIpVersion::V6) => None,
+                                        };
+
+                                        let new_v6 = match temp_source.version {
+                                            Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
+                                                addrs
+                                                    .iter()
+                                                    .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
+                                                    .or_else(|| addrs.iter().find(|ip| ip.is_ipv6()))
+                                                    .copied()
+                                            }
+                                            Some(ConfigIpVersion::V4) => None,
+                                        };
 
                                         // Check for IPv4 changes
                                         if last_v4 != new_v4
