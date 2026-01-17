@@ -20,6 +20,9 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
+[dev-dependencies]
+tracing-subscriber = "0.3"
+
 # Linux-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
 netlink-sys = { version = "0.8", features = ["tokio"] }
