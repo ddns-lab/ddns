@@ -182,22 +182,25 @@ impl AliyunProvider {
     /// Build Aliyun API signature (HMAC-SHA1)
     ///
     /// Aliyun uses a specific signature format:
-    /// `signature = HMAC-SHA1(AccessKeySecret, string_to_sign)`
+    /// `signature = Base64(HMAC-SHA1(AccessKeySecret + "&", string_to_sign))`
     ///
     /// # Algorithm
     ///
     /// 1. Build canonicalized query string
-    /// 2. Calculate HMAC-SHA1
+    /// 2. Calculate HMAC-SHA1 with key = AccessKeySecret + "&"
     /// 3. Base64 encode the result
     fn build_signature(&self, params: &str) -> String {
+        // Aliyun requires "&" appended to the access key secret for signing
+        let signing_key = format!("{}&", self.access_key_secret);
+
         // Create HMAC-SHA1
-        let mut mac = Hmac::<Sha1>::new_from_slice(self.access_key_secret.as_bytes())
+        let mut mac = Hmac::<Sha1>::new_from_slice(signing_key.as_bytes())
             .expect("HMAC can accept key size");
 
         mac.update(params.as_bytes());
 
-        // Encode result to hex
-        hex::encode(mac.finalize().into_bytes())
+        // Encode result to Base64 (as required by Aliyun API)
+        base64::encode(mac.finalize().into_bytes())
     }
 
     /// Build signed API URL with query parameters
