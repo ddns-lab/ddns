@@ -348,6 +348,23 @@ impl IpSource for NetlinkIpSource {
 
             tracing::info!("Netlink IP monitoring started");
 
+            // Verify socket is working by checking FD
+            let fd = sock.as_raw_fd();
+            tracing::debug!("Netlink socket FD: {}", fd);
+
+            // Check if we can peek at the socket
+            use std::os::fd::AsRawFd;
+            let mut poll_ready = false;
+            unsafe {
+                let mut pollfd: libc::pollfd = std::mem::zeroed();
+                pollfd.fd = fd;
+                pollfd.events = libc::POLLIN;
+                let result = libc::poll(&mut pollfd, 1, 100); // 100ms timeout
+                tracing::debug!("Initial poll result: {}", result);
+                poll_ready = result > 0;
+            }
+            tracing::info!("Socket appears ready for reading: {}", poll_ready);
+
             // Track last known IPs separately for v4 and v6
             let mut last_v4: Option<IpAddr> = None;
             let mut last_v6: Option<IpAddr> = None;
