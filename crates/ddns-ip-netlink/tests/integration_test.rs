@@ -157,6 +157,14 @@ async fn real_netlink_creates_socket_and_receives_events() {
     // Give interface time to fully initialize
     tokio::time::sleep(Duration::from_millis(100)).await;
 
+    // Set initial IP BEFORE starting watch()
+    println!("Setting initial IP: 192.168.99.1/24");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
+        .expect("set initial IP succeeds");
+
+    // Wait for interface to stabilize
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
     // Create netlink source watching all interfaces
     let source = NetlinkIpSource::new(None, None);
 
@@ -171,13 +179,8 @@ async fn real_netlink_creates_socket_and_receives_events() {
     println!("Starting watch()...");
     let mut stream = source.watch();
 
-    // Set initial IP
-    println!("Setting initial IP: 192.168.99.1/24");
-    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
-        .expect("set initial IP succeeds");
-
-    // Wait for event (may receive initial address assignment)
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Give netlink thread time to start
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Change IP to trigger event
     println!("Changing IP to: 192.168.99.2/24");
