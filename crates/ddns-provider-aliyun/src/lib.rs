@@ -281,10 +281,33 @@ impl AliyunProvider {
             record_type
         );
 
+        // Parse record name to extract domain and subdomain
+        // For "ddns-test.warzone.cn":
+        //   - DomainName = warzone.cn (main domain)
+        //   - SubDomain = ddns-test.warzone.cn (full subdomain)
+        let parts: Vec<&str> = record_name.split('.').collect();
+
+        if parts.len() < 2 {
+            return Err(Error::provider(
+                "aliyun",
+                format!("Invalid record name '{}': must be a fully qualified domain name", record_name)
+            ));
+        }
+
+        // Extract main domain (last 2 parts for simple domains, or more for complex TLDs)
+        // For simplicity, we assume the last 2 parts form the main domain
+        // e.g., "warzone.cn" from "ddns-test.warzone.cn"
+        let domain_name = if parts.len() >= 2 {
+            parts[parts.len() - 2..].join(".")
+        } else {
+            record_name
+        };
+
         let url = self.build_api_url(
             "DescribeDomainRecords",
             &[
-                ("DomainName", record_name),
+                ("DomainName", &domain_name),
+                ("SubDomain", record_name),  // Full subdomain record
                 ("Type", record_type),
             ],
         );
@@ -423,11 +446,34 @@ impl AliyunProvider {
             ip
         );
 
+        // Parse record name to extract domain and RR (host record)
+        // For "ddns-test.warzone.cn":
+        //   - DomainName = warzone.cn (main domain)
+        //   - RR = ddns-test (host record, without domain)
+        let parts: Vec<&str> = record_name.split('.').collect();
+
+        if parts.len() < 2 {
+            return Err(Error::provider(
+                "aliyun",
+                format!("Invalid record name '{}': must be a fully qualified domain name", record_name)
+            ));
+        }
+
+        // Extract main domain (last 2 parts)
+        let domain_name = parts[parts.len() - 2..].join(".");
+
+        // Extract RR (everything before the domain)
+        let rr = if parts.len() > 2 {
+            parts[..parts.len() - 2].join(".")
+        } else {
+            "@".to_string()  // @ represents the root domain
+        };
+
         let url = self.build_api_url(
             "AddDomainRecord",
             &[
-                ("DomainName", record_name),
-                ("RR", record_name),
+                ("DomainName", &domain_name),
+                ("RR", &rr),
                 ("Type", record_type),
                 ("Value", &ip.to_string()),
                 ("TTL", "600"),
@@ -614,11 +660,20 @@ impl AliyunProvider {
             new_ip
         );
 
+        // Extract RR (host record) from full record name
+        // For "ddns-test.warzone.cn": RR = "ddns-test"
+        let parts: Vec<&str> = record_name.split('.').collect();
+        let rr = if parts.len() > 2 {
+            parts[..parts.len() - 2].join(".")
+        } else {
+            "@".to_string()
+        };
+
         let url = self.build_api_url(
             "UpdateDomainRecord",
             &[
                 ("RecordId", record_id),
-                ("RR", record_name),
+                ("RR", &rr),
                 ("Type", record_type),
                 ("Value", &new_ip.to_string()),
                 ("TTL", "600"),
