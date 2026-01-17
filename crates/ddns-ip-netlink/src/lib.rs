@@ -373,11 +373,18 @@ impl IpSource for NetlinkIpSource {
 
             // Receive loop
             let mut recv_buf = vec![0u8; 8192];
+            let mut loop_count = 0u64;
 
             loop {
+                loop_count += 1;
+                if loop_count % 100 == 0 {
+                    tracing::trace!("Netlink receive loop iteration {}", loop_count);
+                }
+
                 match sock.recv(&mut recv_buf, 0) {
                     Ok(nread) => {
                         if nread == 0 {
+                            tracing::warn!("Netlink socket received 0 bytes, closing");
                             break;
                         }
 
@@ -386,11 +393,12 @@ impl IpSource for NetlinkIpSource {
                         if nread >= 16 {
                             // nlmsghdr is at least 16 bytes
                             let msg_type = recv_buf[4];
+                            tracing::trace!("Received netlink message: type={}, size={}", msg_type, nread);
 
                             if msg_type == libc::RTM_NEWADDR as u8
                                 || msg_type == libc::RTM_DELADDR as u8
                             {
-                                tracing::debug!("Received netlink message, type={}", msg_type);
+                                tracing::debug!("Received address event message, type={}", msg_type);
                                 let now = Instant::now();
 
                                 // Apply debounce
