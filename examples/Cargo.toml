@@ -1,5 +1,5 @@
 [package]
-name = "embedded_usage"
+name = "examples"
 version = "0.1.0"
 edition.workspace = true
 
@@ -10,19 +10,6 @@ path = "embedded_usage.rs"
 [[bin]]
 name = "cloudflare_validation"
 path = "cloudflare-validation.rs"
-
-[[bin]]
-name = "netlink-veth-test"
-path = "netlink-veth-test.rs"
-
-[[bin]]
-name = "netlink-cloudflare-integration-test"
-path = "netlink-cloudflare-integration-test.rs"
-required-features = ["cloudflare"]
-
-[[bin]]
-name = "test-netlink-events"
-path = "test-netlink-events.rs"
 
 [dependencies]
 ddns-core = { path = "../crates/ddns-core" }
