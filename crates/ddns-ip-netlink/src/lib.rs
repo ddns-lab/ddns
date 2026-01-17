@@ -301,7 +301,7 @@ impl IpSource for NetlinkIpSource {
     }
 
     fn watch(&self) -> Pin<Box<dyn tokio_stream::Stream<Item = IpChangeEvent> + Send + 'static>> {
-        use netlink_sys::TokioSocket;
+        use netlink_sys::{Socket, SocketAddr};
         use tokio_stream::wrappers::UnboundedReceiverStream;
 
         let interface = self.interface.clone();
@@ -310,58 +310,43 @@ impl IpSource for NetlinkIpSource {
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // Spawn async task to handle netlink messages
-        tokio::spawn(async move {
-            // Create async netlink socket
-            let mut sock: netlink_sys::TokioSocket = match TokioSocket::new() {
+        // Spawn blocking task to handle netlink messages
+        // This is necessary because netlink-sys Socket is synchronous
+        tokio::task::spawn_blocking(move || {
+            // Create Netlink socket
+            // NETLINK_ROUTE = 0 for routing messages
+            let mut sock = match Socket::new(libc::NETLINK_ROUTE as isize) {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::error!("Failed to create TokioSocket: {}", e);
+                    tracing::error!("Failed to create netlink socket: {}", e);
                     return;
                 }
             };
 
-            // Bind to NETLINK_ROUTE with specific groups
-            match sock.bind(|sock: &netlink_sys::TokioSocket| {
-                // Create socket address for RTNETLINK
-                use std::os::fd::AsRawFd;
-                let fd = sock.as_raw_fd();
-
-                unsafe {
-                    let mut addr: libc::sockaddr_nl = std::mem::zeroed();
-                    addr.nl_family = libc::AF_NETLINK as u16;
-                    addr.nl_pid = std::process::id();
-                    addr.nl_groups = (libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR) as u32;
-
-                    let result = libc::bind(
-                        fd,
-                        &addr as *const libc::sockaddr_nl as *const libc::sockaddr,
-                        std::mem::size_of::<libc::sockaddr_nl>() as libc::socklen_t,
-                    );
-
-                    if result < 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-
-                    // Set receive buffer size
-                    let bufsize: i32 = 8192 * 8;
-                    libc::setsockopt(
-                        fd,
-                        libc::SOL_SOCKET,
-                        libc::SO_RCVBUF,
-                        &bufsize as *const i32 as *const libc::c_void,
-                        std::mem::size_of::<i32>() as libc::socklen_t,
-                    );
-
-                    Ok(())
-                }
-            }) {
-                Ok(_) => tracing::info!("Netlink IP monitoring started (async)"),
-                Err(e) => {
-                    tracing::error!("Failed to bind TokioSocket: {}", e);
-                    return;
-                }
+            // Set receive buffer size
+            let fd = sock.as_raw_fd();
+            let bufsize: i32 = 8192 * 8;
+            unsafe {
+                libc::setsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_RCVBUF,
+                    &bufsize as *const i32 as *const libc::c_void,
+                    std::mem::size_of::<i32>() as libc::socklen_t,
+                );
             }
+
+            // Bind to address
+            let addr = SocketAddr::new(
+                0,
+                (libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR) as u32,
+            );
+            if let Err(e) = sock.bind(&addr) {
+                tracing::error!("Failed to bind netlink socket: {}", e);
+                return;
+            }
+
+            tracing::info!("Netlink IP monitoring started (blocking task)");
 
             // Create a temporary source instance to query addresses
             let temp_source = NetlinkIpSource {
@@ -373,7 +358,7 @@ impl IpSource for NetlinkIpSource {
             // Track last known IPs separately for v4 and v6
             let mut last_v4: Option<IpAddr> = None;
             let mut last_v6: Option<IpAddr> = None;
-            let mut last_event = tokio::time::Instant::now() - tokio::time::Duration::from_secs(60);
+            let mut last_event = std::time::Instant::now() - std::time::Duration::from_secs(60);
 
             // Get initial addresses
             if let Ok(addrs) = temp_source.query_addresses_proc() {
@@ -402,12 +387,11 @@ impl IpSource for NetlinkIpSource {
                 tracing::info!("Initial IPs: v4={:?}, v6={:?}", last_v4, last_v6);
             }
 
-            // Receive loop - use async recv
+            // Receive loop
             let mut recv_buf = vec![0u8; 8192];
 
             loop {
-                // Async receive
-                match sock.recv(&mut recv_buf).await {
+                match sock.recv(&mut recv_buf, 0) {
                     Ok(nread) => {
                         if nread == 0 {
                             tracing::warn!("Netlink socket received 0 bytes, closing");
@@ -416,14 +400,14 @@ impl IpSource for NetlinkIpSource {
 
                         // Parse netlink message header
                         if nread >= 16 {
-                            // nlmsghdr format: bytes 4-5 = nlmsg_type
+                            // nlmsghdr: bytes 4-5 = nlmsg_type (u16)
                             let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
 
                             // Check if this is an address event
                             if msg_type == libc::RTM_NEWADDR as u16
                                 || msg_type == libc::RTM_DELADDR as u16
                             {
-                                let now = tokio::time::Instant::now();
+                                let now = std::time::Instant::now();
 
                                 // Apply debounce
                                 if now.duration_since(last_event) > debounce_duration {
