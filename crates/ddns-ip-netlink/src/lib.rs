@@ -397,13 +397,32 @@ impl IpSource for NetlinkIpSource {
             loop {
                 match sock.recv(&mut recv_buf, 0) {
                     Ok(nread) => {
-                        if nread == 0 {
-                            tracing::warn!("Netlink socket received 0 bytes, closing");
-                            break;
+                        // In netlink, 0-length messages are valid (e.g., NLMSG_DONE)
+                        // Only break on actual errors
+                        if nread > 0 {
+                            // Log every message received
+                            if nread >= 16 {
+                                // nlmsghdr: bytes 0-3 = length, 4-5 = type (u16)
+                                let nlmsg_len = u32::from_ne_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
+                                let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
+                                let msg_flags = u16::from_ne_bytes([recv_buf[6], recv_buf[7]]);
+
+                                // Log all received messages for debugging
+                                tracing::debug!("Received netlink: len={}, type={}, flags={}", nlmsg_len, msg_type, msg_flags);
+                            } else {
+                                tracing::trace!("Received short netlink message: {} bytes", nread);
+                            }
                         }
 
-                        // Log every message received
+                        // Check if this is an address event
                         if nread >= 16 {
+                            // nlmsghdr: bytes 4-5 = nlmsg_type (u16)
+                            let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
+
+                            // Check if this is an address event
+                            if msg_type == libc::RTM_NEWADDR as u16
+                                || msg_type == libc::RTM_DELADDR as u16
+                            {
                             // nlmsghdr: bytes 0-3 = length, 4-5 = type (u16)
                             let nlmsg_len = u32::from_ne_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
                             let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
