@@ -309,10 +309,12 @@ impl AliyunProvider {
             domain_name, record_name, record_type
         );
 
+        // Build API parameters
+        // Note: When using SubDomain (full subdomain), we don't need to pass DomainName
+        // Aliyun API will automatically extract the domain from the subdomain
         let url = self.build_api_url(
             "DescribeDomainRecords",
             &[
-                ("DomainName", &domain_name),
                 ("SubDomain", record_name),  // Full subdomain record
                 ("Type", record_type),
             ],
