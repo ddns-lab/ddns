@@ -207,7 +207,8 @@ impl AliyunProvider {
     fn build_api_url(&self, action: &str, params: &[(&str, &str)]) -> String {
         let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         // Generate unique nonce for this request (required by Aliyun)
-        let nonce = format!("{}{}", timestamp, std::process::id());
+        // Use timestamp + nanoseconds for better uniqueness
+        let nonce = format!("{}{}", timestamp, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
         let mut query_pairs: Vec<(String, String)> = vec![
             ("Action".to_string(), action.to_string()),
             ("Version".to_string(), API_VERSION.to_string()),
