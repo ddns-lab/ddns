@@ -11,12 +11,21 @@ path = "embedded_usage.rs"
 name = "cloudflare_validation"
 path = "cloudflare-validation.rs"
 
+[[bin]]
+name = "netlink-veth-test"
+path = "netlink-veth-test.rs"
+
 [dependencies]
 ddns-core = { path = "../crates/ddns-core" }
-ddns-provider-cloudflare = { path = "../crates/ddns-provider-cloudflare" }
+ddns-provider-cloudflare = { path = "../crates/ddns-provider-cloudflare", optional = true }
+ddns-ip-netlink = { path = "../crates/ddns-ip-netlink" }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tokio-stream = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
+
+[features]
+default = []
+cloudflare = ["ddns-provider-cloudflare"]

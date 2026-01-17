@@ -38,7 +38,7 @@ use std::os::fd::AsRawFd;
 use std::pin::Pin;
 
 #[cfg(target_os = "linux")]
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Default debounce window to ignore IP flapping
 #[cfg(target_os = "linux")]
@@ -265,23 +265,22 @@ impl IpSource for NetlinkIpSource {
         let addresses = self.query_addresses_proc()?;
 
         // Select IP based on version configuration
+        // IMPORTANT: Only public IPs should be used for DNS updates
         let selected = match self.version {
             Some(ConfigIpVersion::V4) => {
-                // IPv4 only: prefer public IP, fall back to any IPv4
+                // IPv4 only: only public IPs
                 addresses
                     .iter()
                     .find(|ip| ip.is_ipv4() && self.is_public_ip(ip))
-                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv4()))
             }
             Some(ConfigIpVersion::V6) => {
-                // IPv6 only: prefer public IP, fall back to any IPv6
+                // IPv6 only: only public IPs
                 addresses
                     .iter()
                     .find(|ip| ip.is_ipv6() && self.is_public_ip(ip))
-                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv6()))
             }
             Some(ConfigIpVersion::Both) | None => {
-                // Both versions: prefer public IPv4, then public IPv6, then any
+                // Both versions: prefer public IPv4, then public IPv6
                 addresses
                     .iter()
                     .find(|ip| ip.is_ipv4() && self.is_public_ip(ip))
@@ -290,8 +289,6 @@ impl IpSource for NetlinkIpSource {
                             .iter()
                             .find(|ip| ip.is_ipv6() && self.is_public_ip(ip))
                     })
-                    .or_else(|| addresses.iter().find(|ip| ip.is_ipv4()))
-                    .or_else(|| addresses.first())
             }
         };
 
@@ -391,126 +388,106 @@ impl IpSource for NetlinkIpSource {
                 tracing::info!("Initial IPs: v4={:?}, v6={:?}", last_v4, last_v6);
             }
 
-            // Receive loop
+            // Receive loop - use raw file descriptor for better control
+            let fd = sock.as_raw_fd();
             let mut recv_buf = vec![0u8; 8192];
 
             loop {
-                match sock.recv(&mut recv_buf, 0) {
-                    Ok(nread) => {
-                        // In netlink, 0-length messages are valid (e.g., NLMSG_DONE)
-                        // Only break on actual errors
-                        if nread > 0 {
-                            // Log every message received
-                            if nread >= 16 {
-                                // nlmsghdr: bytes 0-3 = length, 4-5 = type (u16)
-                                let nlmsg_len = u32::from_ne_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
-                                let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
-                                let msg_flags = u16::from_ne_bytes([recv_buf[6], recv_buf[7]]);
+                // Use libc recv directly for better control
+                let nread = unsafe {
+                    libc::recv(
+                        fd,
+                        recv_buf.as_mut_ptr() as *mut libc::c_void,
+                        recv_buf.len(),
+                        0
+                    )
+                };
 
-                                // Log all received messages for debugging
-                                tracing::debug!("Received netlink: len={}, type={}, flags={}", nlmsg_len, msg_type, msg_flags);
-                            } else {
-                                tracing::trace!("Received short netlink message: {} bytes", nread);
-                            }
-                        }
+                if nread < 0 {
+                    tracing::error!("Netlink recv error: {}", std::io::Error::last_os_error());
+                    break;
+                }
 
-                        // Check if this is an address event
-                        if nread >= 16 {
-                            // nlmsghdr: bytes 4-5 = nlmsg_type (u16)
-                            let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
+                let nread = nread as usize;
 
-                            // Check if this is an address event
-                            if msg_type == libc::RTM_NEWADDR as u16
-                                || msg_type == libc::RTM_DELADDR as u16
-                            {
-                            // nlmsghdr: bytes 0-3 = length, 4-5 = type (u16)
-                            let nlmsg_len = u32::from_ne_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
-                            let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
-                            let msg_flags = u16::from_ne_bytes([recv_buf[6], recv_buf[7]]);
+                // Check if this is an address event
+                if nread >= 16 {
+                    // nlmsghdr: bytes 4-5 = nlmsg_type (u16)
+                    let msg_type = u16::from_ne_bytes([recv_buf[4], recv_buf[5]]);
 
-                            // Log all received messages for debugging
-                            tracing::debug!("Received netlink: len={}, type={}, flags={}", nlmsg_len, msg_type, msg_flags);
+                    // Check if this is an address event
+                    if msg_type == libc::RTM_NEWADDR as u16
+                        || msg_type == libc::RTM_DELADDR as u16
+                    {
+                        let now = std::time::Instant::now();
 
-                            // Check if this is an address event
-                            if msg_type == libc::RTM_NEWADDR as u16
-                                || msg_type == libc::RTM_DELADDR as u16
-                            {
-                                let now = std::time::Instant::now();
-
-                                // Apply debounce
-                                if now.duration_since(last_event) > debounce_duration {
-                                    // Re-query all IPs
-                                    if let Ok(addrs) = temp_source.query_addresses_proc() {
-                                        // Select IPv4 and IPv6 using the same logic as current()
-                                        let new_v4 = match temp_source.version {
-                                            Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
-                                                addrs
-                                                    .iter()
-                                                    .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
-                                                    .or_else(|| addrs.iter().find(|ip| ip.is_ipv4()))
-                                                    .copied()
-                                            }
-                                            Some(ConfigIpVersion::V6) => None,
-                                        };
-
-                                        let new_v6 = match temp_source.version {
-                                            Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
-                                                addrs
-                                                    .iter()
-                                                    .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
-                                                    .or_else(|| addrs.iter().find(|ip| ip.is_ipv6()))
-                                                    .copied()
-                                            }
-                                            Some(ConfigIpVersion::V4) => None,
-                                        };
-
-                                        // Check for IPv4 changes
-                                        if last_v4 != new_v4
-                                            && let Some(v4) = new_v4
-                                        {
-                                            tracing::info!(
-                                                "IPv4 changed: {:?} -> {:?}",
-                                                last_v4,
-                                                v4
-                                            );
-                                            let event = IpChangeEvent::new(v4, last_v4);
-                                            if tx.send(event).is_err() {
-                                                tracing::error!(
-                                                    "Receiver dropped, stopping monitor"
-                                                );
-                                                break;
-                                            }
-                                            last_v4 = new_v4;
-                                        }
-
-                                        // Check for IPv6 changes
-                                        if last_v6 != new_v6
-                                            && let Some(v6) = new_v6
-                                        {
-                                            tracing::info!(
-                                                "IPv6 changed: {:?} -> {:?}",
-                                                last_v6,
-                                                v6
-                                            );
-                                            let event = IpChangeEvent::new(v6, last_v6);
-                                            if tx.send(event).is_err() {
-                                                tracing::error!(
-                                                    "Receiver dropped, stopping monitor"
-                                                );
-                                                break;
-                                            }
-                                            last_v6 = new_v6;
-                                        }
-
-                                        last_event = now;
+                        // Apply debounce
+                        if now.duration_since(last_event) > debounce_duration {
+                            // Re-query all IPs
+                            if let Ok(addrs) = temp_source.query_addresses_proc() {
+                                // Select IPv4 and IPv6 using the same logic as current()
+                                // IMPORTANT: Only public IPs should trigger DNS updates
+                                let new_v4 = match temp_source.version {
+                                    Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
+                                        addrs
+                                            .iter()
+                                            .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
+                                            .copied()
                                     }
+                                    Some(ConfigIpVersion::V6) => None,
+                                };
+
+                                let new_v6 = match temp_source.version {
+                                    Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
+                                        addrs
+                                            .iter()
+                                            .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
+                                            .copied()
+                                    }
+                                    Some(ConfigIpVersion::V4) => None,
+                                };
+
+                                // Check for IPv4 changes
+                                if last_v4 != new_v4
+                                    && let Some(v4) = new_v4
+                                {
+                                    tracing::info!(
+                                        "IPv4 changed: {:?} -> {:?}",
+                                        last_v4,
+                                        v4
+                                    );
+                                    let event = IpChangeEvent::new(v4, last_v4);
+                                    if tx.send(event).is_err() {
+                                        tracing::error!(
+                                            "Receiver dropped, stopping monitor"
+                                        );
+                                        break;
+                                    }
+                                    last_v4 = new_v4;
                                 }
+
+                                // Check for IPv6 changes
+                                if last_v6 != new_v6
+                                    && let Some(v6) = new_v6
+                                {
+                                    tracing::info!(
+                                        "IPv6 changed: {:?} -> {:?}",
+                                        last_v6,
+                                        v6
+                                    );
+                                    let event = IpChangeEvent::new(v6, last_v6);
+                                    if tx.send(event).is_err() {
+                                        tracing::error!(
+                                            "Receiver dropped, stopping monitor"
+                                        );
+                                        break;
+                                    }
+                                    last_v6 = new_v6;
+                                }
+
+                                last_event = now;
                             }
                         }
-                    }
-                    Err(e) => {
-                        tracing::error!("Netlink recv error: {}", e);
-                        break;
                     }
                 }
             }

@@ -14,7 +14,7 @@
 // DDNS_RECORD_NAME=ddns-test.example.com \
 // DDNS_RECORD_TYPE=A \
 // DDNS_TEST_IP=1.2.3.4 \
-// cargo run --example cloudflare-validation
+// cargo run --example cloudflare-validation --features cloudflare
 //
 // # Live mode (makes actual changes!)
 // DDNS_MODE=live \
@@ -24,7 +24,7 @@
 // DDNS_RECORD_NAME=ddns-test.example.com \
 // DDNS_RECORD_TYPE=A \
 // DDNS_TEST_IP=1.2.3.4 \
-// cargo run --example cloudflare-validation
+// cargo run --example cloudflare-validation --features cloudflare
 // ```
 //
 // ## Environment Variables
@@ -39,6 +39,8 @@
 // - `CLOUDFLARE_ZONE_ID`: Zone ID (if not provided, will auto-discover)
 // - `DDNS_RECORD_TYPE`: Record type (A or AAAA, default: A)
 // - `DDNS_MODE`: "dry-run" or "live" (default: dry-run)
+
+#![cfg(feature = "cloudflare")]
 
 use ddns_core::traits::DnsProvider;
 use ddns_provider_cloudflare::CloudflareProvider;
