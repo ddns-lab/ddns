@@ -337,10 +337,14 @@ impl IpSource for NetlinkIpSource {
             }
 
             // Bind to address
+            // SocketAddr::new(pid, groups) - but we need to bind first to get a valid pid
+            // Use 0 for pid (kernel assigns), and set multicast groups
             let addr = SocketAddr::new(
-                0,
+                0,  // pid (0 = kernel assigns)
                 (libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR) as u32,
             );
+
+            tracing::info!("Binding to netlink groups: RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR");
             if let Err(e) = sock.bind(&addr) {
                 tracing::error!("Failed to bind netlink socket: {}", e);
                 return;
