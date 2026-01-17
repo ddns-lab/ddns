@@ -390,12 +390,15 @@ impl IpSource for NetlinkIpSource {
                             if msg_type == libc::RTM_NEWADDR as u8
                                 || msg_type == libc::RTM_DELADDR as u8
                             {
+                                tracing::debug!("Received netlink message, type={}", msg_type);
                                 let now = Instant::now();
 
                                 // Apply debounce
                                 if now.duration_since(last_event) > debounce_duration {
                                     // Re-query all IPs
                                     if let Ok(addrs) = temp_source.query_addresses_proc() {
+                                        tracing::debug!("Received netlink event, addresses: {:?}", addrs);
+
                                         // Select IPv4 and IPv6 using the same logic as current()
                                         let new_v4 = match temp_source.version {
                                             Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
@@ -418,6 +421,9 @@ impl IpSource for NetlinkIpSource {
                                             }
                                             Some(ConfigIpVersion::V4) => None,
                                         };
+
+                                        tracing::debug!("Selected IPs - new_v4={:?}, new_v6={:?}", new_v4, new_v6);
+                                        tracing::debug!("Previous IPs - last_v4={:?}, last_v6={:?}", last_v4, last_v6);
 
                                         // Check for IPv4 changes
                                         if last_v4 != new_v4
