@@ -300,7 +300,7 @@ impl AliyunProvider {
         let domain_name = if parts.len() >= 2 {
             parts[parts.len() - 2..].join(".")
         } else {
-            record_name
+            record_name.to_string()
         };
 
         let url = self.build_api_url(
