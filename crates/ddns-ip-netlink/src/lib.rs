@@ -38,7 +38,7 @@ use std::os::fd::AsRawFd;
 use std::pin::Pin;
 
 #[cfg(target_os = "linux")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Default debounce window to ignore IP flapping
 #[cfg(target_os = "linux")]
@@ -361,14 +361,13 @@ impl IpSource for NetlinkIpSource {
             let mut last_v6: Option<IpAddr> = None;
             let mut last_event = std::time::Instant::now() - std::time::Duration::from_secs(60);
 
-            // Get initial addresses
+            // Get initial addresses (only public IPs for triggering DNS updates)
             if let Ok(addrs) = temp_source.query_addresses_proc() {
                 last_v4 = match temp_source.version {
                     Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
                         addrs
                             .iter()
                             .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
-                            .or_else(|| addrs.iter().find(|ip| ip.is_ipv4()))
                             .copied()
                     }
                     Some(ConfigIpVersion::V6) => None,
@@ -379,13 +378,17 @@ impl IpSource for NetlinkIpSource {
                         addrs
                             .iter()
                             .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
-                            .or_else(|| addrs.iter().find(|ip| ip.is_ipv6()))
                             .copied()
                     }
                     Some(ConfigIpVersion::V4) => None,
                 };
 
-                tracing::info!("Initial IPs: v4={:?}, v6={:?}", last_v4, last_v6);
+                // Log all available IPs for monitoring
+                let any_v4 = addrs.iter().find(|ip| ip.is_ipv4()).copied();
+                let any_v6 = addrs.iter().find(|ip| ip.is_ipv6()).copied();
+
+                tracing::info!("Initial IPs - v4: {:?} (any: {:?}), v6: {:?} (any: {:?})",
+                    last_v4, any_v4, last_v6, any_v6);
             }
 
             // Receive loop - use raw file descriptor for better control
@@ -425,9 +428,12 @@ impl IpSource for NetlinkIpSource {
                         if now.duration_since(last_event) > debounce_duration {
                             // Re-query all IPs
                             if let Ok(addrs) = temp_source.query_addresses_proc() {
-                                // Select IPv4 and IPv6 using the same logic as current()
-                                // IMPORTANT: Only public IPs should trigger DNS updates
-                                let new_v4 = match temp_source.version {
+                                // First, find all IPv4 and IPv6 addresses (for logging)
+                                let any_v4 = addrs.iter().find(|ip| ip.is_ipv4()).copied();
+                                let any_v6 = addrs.iter().find(|ip| ip.is_ipv6()).copied();
+
+                                // Then, find only public IPs (for triggering DNS updates)
+                                let public_v4 = match temp_source.version {
                                     Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
                                         addrs
                                             .iter()
@@ -437,7 +443,7 @@ impl IpSource for NetlinkIpSource {
                                     Some(ConfigIpVersion::V6) => None,
                                 };
 
-                                let new_v6 = match temp_source.version {
+                                let public_v6 = match temp_source.version {
                                     Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
                                         addrs
                                             .iter()
@@ -447,42 +453,54 @@ impl IpSource for NetlinkIpSource {
                                     Some(ConfigIpVersion::V4) => None,
                                 };
 
-                                // Check for IPv4 changes
-                                if last_v4 != new_v4
-                                    && let Some(v4) = new_v4
-                                {
+                                // Log all IP changes for monitoring (both private and public)
+                                if last_v4 != any_v4 {
+                                    let is_public = any_v4.map_or(false, |ip| temp_source.is_public_ip(&ip));
                                     tracing::info!(
-                                        "IPv4 changed: {:?} -> {:?}",
+                                        "IPv4 changed: {:?} -> {:?} [{}]",
                                         last_v4,
-                                        v4
+                                        any_v4,
+                                        if is_public { "PUBLIC - will trigger DNS update" } else { "private - logged only" }
                                     );
-                                    let event = IpChangeEvent::new(v4, last_v4);
-                                    if tx.send(event).is_err() {
-                                        tracing::error!(
-                                            "Receiver dropped, stopping monitor"
-                                        );
-                                        break;
-                                    }
-                                    last_v4 = new_v4;
                                 }
 
-                                // Check for IPv6 changes
-                                if last_v6 != new_v6
-                                    && let Some(v6) = new_v6
-                                {
+                                if last_v6 != any_v6 {
+                                    let is_public = any_v6.map_or(false, |ip| temp_source.is_public_ip(&ip));
                                     tracing::info!(
-                                        "IPv6 changed: {:?} -> {:?}",
+                                        "IPv6 changed: {:?} -> {:?} [{}]",
                                         last_v6,
-                                        v6
+                                        any_v6,
+                                        if is_public { "PUBLIC - will trigger DNS update" } else { "private - logged only" }
                                     );
-                                    let event = IpChangeEvent::new(v6, last_v6);
-                                    if tx.send(event).is_err() {
-                                        tracing::error!(
-                                            "Receiver dropped, stopping monitor"
-                                        );
-                                        break;
+                                }
+
+                                // Only trigger DNS updates for public IP changes
+                                if last_v4 != public_v4 {
+                                    if let Some(v4) = public_v4 {
+                                        tracing::info!("→ Triggering DNS update for public IPv4: {}", v4);
+                                        let event = IpChangeEvent::new(v4, last_v4);
+                                        if tx.send(event).is_err() {
+                                            tracing::error!("Receiver dropped, stopping monitor");
+                                            break;
+                                        }
+                                    } else if last_v4.is_some() {
+                                        tracing::warn!("→ No public IPv4 available, DNS update skipped (was: {:?})", last_v4);
                                     }
-                                    last_v6 = new_v6;
+                                    last_v4 = public_v4;
+                                }
+
+                                if last_v6 != public_v6 {
+                                    if let Some(v6) = public_v6 {
+                                        tracing::info!("→ Triggering DNS update for public IPv6: {}", v6);
+                                        let event = IpChangeEvent::new(v6, last_v6);
+                                        if tx.send(event).is_err() {
+                                            tracing::error!("Receiver dropped, stopping monitor");
+                                            break;
+                                        }
+                                    } else if last_v6.is_some() {
+                                        tracing::warn!("→ No public IPv6 available, DNS update skipped (was: {:?})", last_v6);
+                                    }
+                                    last_v6 = public_v6;
                                 }
 
                                 last_event = now;
