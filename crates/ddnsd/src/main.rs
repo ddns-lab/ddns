@@ -251,13 +251,14 @@ impl Config {
             );
         }
 
-        // Cloudflare API tokens are typically 40 characters alphanumeric
-        // Other providers may have different formats, so we do basic validation
-        if self.provider_api_token.len() < 20 {
+        // Provider-specific tokens are validated by each provider's Configurable implementation
+        // This field is kept for backward compatibility but is not strictly validated here
+        // Different providers use different env vars (e.g., ALIYUN_ACCESS_KEY_ID, CLOUDFLARE_API_TOKEN)
+        // Only check for obvious placeholder tokens
+        if self.provider_api_token.len() < 3 {
             anyhow::bail!(
                 "DDNS_PROVIDER_API_TOKEN appears too short ({} chars). \
-                Cloudflare tokens are typically 40 characters. \
-                Verify your token is correct.",
+                Verify your credentials are correct.",
                 self.provider_api_token.len()
             );
         }
