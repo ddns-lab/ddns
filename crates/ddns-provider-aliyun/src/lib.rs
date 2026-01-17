@@ -203,6 +203,8 @@ impl AliyunProvider {
     /// Build signed API URL with query parameters
     fn build_api_url(&self, action: &str, params: &[(&str, &str)]) -> String {
         let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        // Generate unique nonce for this request (required by Aliyun)
+        let nonce = format!("{}{}", timestamp, std::process::id());
         let mut query_pairs: Vec<(String, String)> = vec![
             ("Action".to_string(), action.to_string()),
             ("Version".to_string(), API_VERSION.to_string()),
@@ -210,6 +212,7 @@ impl AliyunProvider {
             ("Format".to_string(), "json".to_string()),
             ("SignatureMethod".to_string(), "HMAC-SHA1".to_string()),
             ("SignatureVersion".to_string(), "1.0".to_string()),
+            ("SignatureNonce".to_string(), nonce),
             ("Timestamp".to_string(), timestamp),
         ];
 
