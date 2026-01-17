@@ -133,23 +133,39 @@ async fn real_netlink_creates_socket_and_receives_events() {
 
     setup().expect("setup succeeds");
 
+    // Give interface time to fully initialize
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     // Create netlink source watching all interfaces
     let source = NetlinkIpSource::new(None, None);
+
+    // Test that current() works first
+    println!("Testing current()...");
+    match source.current().await {
+        Ok(ip) => println!("✓ current() returned: {:?}", ip),
+        Err(e) => println!("✗ current() failed: {:?}", e),
+    }
+
+    // Now test watch()
+    println!("Starting watch()...");
     let mut stream = source.watch();
 
     // Set initial IP
+    println!("Setting initial IP: 192.168.99.1/24");
     set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
         .expect("set initial IP succeeds");
 
     // Wait for event (may receive initial address assignment)
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Change IP to trigger event
+    println!("Changing IP to: 192.168.99.2/24");
     flush_interface_ips(TEST_INTERFACE).expect("flush succeeds");
     set_interface_ip(TEST_INTERFACE, "192.168.99.2/24")
         .expect("set new IP succeeds");
 
     // Wait for event
+    println!("Waiting for event...");
     let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
         Duration::from_secs(5),
         stream.next()
