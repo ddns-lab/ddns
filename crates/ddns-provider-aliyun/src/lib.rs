@@ -304,6 +304,11 @@ impl AliyunProvider {
             record_name.to_string()
         };
 
+        tracing::debug!(
+            "Parsed domain: domain_name={}, record_name={}, record_type={}",
+            domain_name, record_name, record_type
+        );
+
         let url = self.build_api_url(
             "DescribeDomainRecords",
             &[
@@ -312,6 +317,8 @@ impl AliyunProvider {
                 ("Type", record_type),
             ],
         );
+
+        tracing::debug!("Aliyun API URL: {}", url);
 
         let response = self
             .client
