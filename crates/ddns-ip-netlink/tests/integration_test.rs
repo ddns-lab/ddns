@@ -39,23 +39,32 @@ use tokio_stream::StreamExt;
 const TEST_INTERFACE: &str = "ddns-test0";
 const TEST_INTERFACE_2: &str = "ddns-test1";
 
-/// Helper to create a dummy network interface
-fn create_dummy_interface(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+/// Helper to create a veth (virtual ethernet) pair
+/// veth interfaces behave more like real network interfaces and trigger netlink events properly
+fn create_veth_pair(name: &str, peer: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["link", "add", name, "type", "dummy"])
+        .args(&["link", "add", name, "type", "veth", "peer", "name", peer])
         .status()?;
 
     if !status.success() {
-        return Err(format!("Failed to create dummy interface {}", name).into());
+        return Err(format!("Failed to create veth pair {}/{}", name, peer).into());
     }
 
-    // Bring the interface up
+    // Bring both interfaces up
     let status = Command::new("ip")
         .args(&["link", "set", name, "up"])
         .status()?;
 
     if !status.success() {
         return Err(format!("Failed to bring interface {} up", name).into());
+    }
+
+    let status = Command::new("ip")
+        .args(&["link", "set", peer, "up"])
+        .status()?;
+
+    if !status.success() {
+        return Err(format!("Failed to bring interface {} up", peer).into());
     }
 
     Ok(())
@@ -113,15 +122,17 @@ fn delete_interface(interface: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Setup function: Create test interface before running tests
+/// Setup function: Create test interfaces before running tests
 fn setup() -> Result<(), Box<dyn std::error::Error>> {
-    // Clean up any existing test interface first
+    // Clean up any existing test interfaces first
     let _ = delete_interface(TEST_INTERFACE);
+    let _ = delete_interface(format!("{}-peer", TEST_INTERFACE).as_str());
     let _ = delete_interface(TEST_INTERFACE_2);
+    let _ = delete_interface(format!("{}-peer", TEST_INTERFACE_2).as_str());
 
-    // Create fresh test interfaces
-    create_dummy_interface(TEST_INTERFACE)?;
-    create_dummy_interface(TEST_INTERFACE_2)?;
+    // Create fresh veth pairs (peer interfaces are created but not used in tests)
+    create_veth_pair(TEST_INTERFACE, &format!("{}-peer", TEST_INTERFACE))?;
+    create_veth_pair(TEST_INTERFACE_2, &format!("{}-peer", TEST_INTERFACE_2))?;
 
     Ok(())
 }
@@ -129,7 +140,9 @@ fn setup() -> Result<(), Box<dyn std::error::Error>> {
 /// Teardown function: Delete test interfaces after running tests
 fn teardown() {
     let _ = delete_interface(TEST_INTERFACE);
+    let _ = delete_interface(format!("{}-peer", TEST_INTERFACE).as_str());
     let _ = delete_interface(TEST_INTERFACE_2);
+    let _ = delete_interface(format!("{}-peer", TEST_INTERFACE_2).as_str());
 }
 
 #[tokio::test]
