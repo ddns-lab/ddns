@@ -201,18 +201,69 @@ let mut last_public_v4: Option<IpAddr> = None;
 - **致命错误**（socket创建失败）：记录ERROR，退出监控
 - **预期错误**（无public IP）：记录INFO，等待事件
 
+## ⚠️ 已知问题
+
+### Bug: `ip addr change` 导致查询阻塞
+
+**严重性**: 🔴 高 - 影响生产环境稳定性
+
+**描述**:
+使用 `ip addr change` 命令修改veth接口IP地址时，`query_ipv4_addresses()` 中的 `ioctl()` 调用会被阻塞约10秒。
+
+**时间线**:
+```
+10:59:02 - NEWADDR事件 (198.51.100.100) ✓ 处理成功
+10:59:41 - NEWADDR事件 (203.0.113.100) → 查询被阻塞
+11:00:51 - DELADDR事件触发 (10秒后)
+```
+
+**影响**:
+- 整个netlink监控循环停止
+- 无法处理后续IP变化事件
+- 需要重启程序才能恢复
+
+**Workaround** (已验证):
+```bash
+# 不要使用这个（会导致阻塞）:
+ip addr change 203.0.113.99/32 dev v99
+
+# 使用这个（可以正常工作）:
+ip addr del 198.51.100.99/32 dev v99
+ip addr add 203.0.113.99/32 dev v99
+```
+
+**修复建议**:
+1. 添加查询超时机制
+2. 重构查询逻辑，避免在事件循环中使用阻塞调用
+3. 考虑直接从netlink消息解析IP信息，不依赖ioctl()
+
+**测试状态**:
+- ✅ 创建DNS记录: 正常
+- ✅ 更新DNS记录 (使用workaround): 正常
+- ⚠️ 更新DNS记录 (使用change命令): 阻塞
+
+详见: `TEST_REPORT.md`
+
+---
+
 ## 📚 后续改进建议
 
-### 短期（可选）
-1. 移除 `Instant` unused import 警告
-2. 添加单元测试（需要mock netlink socket）
-3. 添加metrics（事件计数、API延迟）
+### 高优先级（必须）
+1. **修复 `ioctl()` 阻塞bug**
+   - 实现超时机制
+   - 重构查询逻辑，避免在事件循环中阻塞
+   - 考虑直接从netlink消息解析IP信息
 
-### 长期（可选）
-1. 接口优先级排序（避免 `find()` 的不确定性）
-2. 支持IPv6 AAAA记录更新
-3. 添加DNS记录TTL配置
-4. 添加多provider并发更新
+### 中优先级（推荐）
+2. 移除 `Instant` unused import 警告
+3. 添加单元测试（需要mock netlink socket）
+4. 添加metrics（事件计数、API延迟）
+
+### 低优先级（可选）
+5. 接口优先级排序（避免 `find()` 的不确定性）
+6. 支持IPv6 AAAA记录更新
+7. 添加DNS记录TTL配置
+8. 添加多provider并发更新
 
 ## ✨ 最终验证
 
