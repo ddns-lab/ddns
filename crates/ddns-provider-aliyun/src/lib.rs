@@ -236,8 +236,15 @@ impl AliyunProvider {
 
         let query_string = canonicalized_query.join("&");
 
-        // Build string to sign
-        let string_to_sign = format!("GET&%2F&{}", urlencoding::encode(&query_string));
+        // Determine HTTP method based on action
+        // AddDomainRecord and UpdateDomainRecord use POST, others use GET
+        let http_method = match action {
+            "AddDomainRecord" | "UpdateDomainRecord" => "POST",
+            _ => "GET",
+        };
+
+        // Build string to sign with correct HTTP method
+        let string_to_sign = format!("{}&%2F&{}", http_method, urlencoding::encode(&query_string));
 
         // Calculate signature
         let signature = self.build_signature(&string_to_sign);
