@@ -313,7 +313,7 @@ impl IpSource for NetlinkIpSource {
         // Spawn async task to handle netlink messages
         tokio::spawn(async move {
             // Create async netlink socket
-            let mut sock = match TokioSocket::new() {
+            let mut sock: netlink_sys::TokioSocket = match TokioSocket::new() {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!("Failed to create TokioSocket: {}", e);
@@ -322,7 +322,7 @@ impl IpSource for NetlinkIpSource {
             };
 
             // Bind to NETLINK_ROUTE with specific groups
-            match sock.bind(|sock: &TokioSocket| {
+            match sock.bind(|sock: &netlink_sys::TokioSocket| {
                 // Create socket address for RTNETLINK
                 use std::os::fd::AsRawFd;
                 let fd = sock.as_raw_fd();
