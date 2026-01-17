@@ -20,6 +20,13 @@
 
 #![cfg(target_os = "linux")]
 
+// Initialize tracing subscriber for tests
+fn init_tracing() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+}
+
 use ddns_core::traits::ip_source::IpChangeEvent;
 use ddns_core::traits::ip_source::IpSource;
 use ddns_ip_netlink::NetlinkIpSource;
@@ -131,6 +138,7 @@ async fn real_netlink_creates_socket_and_receives_events() {
     //! Test that we can create a real netlink socket and receive events
     //! when IP addresses change.
 
+    init_tracing();
     setup().expect("setup succeeds");
 
     // Give interface time to fully initialize
