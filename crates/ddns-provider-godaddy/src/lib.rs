@@ -58,8 +58,11 @@ use serde_json::Value;
 use std::net::IpAddr;
 use std::time::Duration;
 
-/// GoDaddy API base URL
+/// GoDaddy API base URL (production)
 const GODADDY_API_BASE: &str = "https://api.godaddy.com";
+
+/// GoDaddy API base URL (OTE/test environment)
+const GODADDY_API_OTE_BASE: &str = "https://api.ote-godaddy.com";
 
 /// Default HTTP timeout for API requests (30 seconds)
 const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -107,6 +110,9 @@ pub struct GoDaddyProvider {
     /// ⚠️ NEVER log this value
     api_secret: String,
 
+    /// API base URL (OTE or production)
+    api_base: String,
+
     /// HTTP client for API requests
     client: reqwest::Client,
 
@@ -121,12 +127,13 @@ impl GoDaddyProvider {
     ///
     /// - `api_key`: GoDaddy API key
     /// - `api_secret`: GoDaddy API secret
+    /// - `ote`: If true, use OTE (test) environment; otherwise use production
     /// - `dry_run`: If true, perform GET requests but skip updates
     ///
     /// # Security
     ///
     /// The API key and secret will NEVER be logged or displayed in error messages.
-    pub fn new(api_key: impl Into<String>, api_secret: impl Into<String>, dry_run: bool) -> Self {
+    pub fn new(api_key: impl Into<String>, api_secret: impl Into<String>, ote: bool, dry_run: bool) -> Self {
         // Build HTTP client with timeout
         let client = reqwest::Client::builder()
             .timeout(DEFAULT_HTTP_TIMEOUT)
@@ -144,9 +151,17 @@ impl GoDaddyProvider {
             panic!("GoDaddy API secret cannot be empty");
         }
 
+        // Select API base URL based on OTE flag
+        let api_base = if ote {
+            GODADDY_API_OTE_BASE.to_string()
+        } else {
+            GODADDY_API_BASE.to_string()
+        };
+
         Self {
             api_key,
             api_secret,
+            api_base,
             client,
             dry_run,
         }
@@ -154,19 +169,25 @@ impl GoDaddyProvider {
 
     /// Create a new GoDaddy provider (production/live mode)
     pub fn new_live(api_key: impl Into<String>, api_secret: impl Into<String>) -> Self {
-        Self::new(api_key, api_secret, false)
+        Self::new(api_key, api_secret, false, false)
+    }
+
+    /// Create a new GoDaddy provider (OTE/test environment)
+    pub fn new_ote(api_key: impl Into<String>, api_secret: impl Into<String>) -> Self {
+        Self::new(api_key, api_secret, true, false)
     }
 
     /// Create a new GoDaddy provider (dry-run mode)
     pub fn new_dry_run(api_key: impl Into<String>, api_secret: impl Into<String>) -> Self {
-        Self::new(api_key, api_secret, true)
+        Self::new(api_key, api_secret, false, true)
     }
 
-    /// Build Basic Auth header value
+    /// Build sso-key Auth header value (GoDaddy-specific format)
+    ///
+    /// GoDaddy uses a custom "sso-key" format instead of standard Basic Auth:
+    /// Authorization: sso-key [KEY]:[SECRET]
     fn build_auth_header(&self) -> String {
-        let credentials = format!("{}:{}", self.api_key, self.api_secret);
-        let encoded = base64::encode(credentials);
-        format!("Basic {}", encoded)
+        format!("sso-key {}:{}", self.api_key, self.api_secret)
     }
 
     /// Extract domain from record name
@@ -221,7 +242,7 @@ impl GoDaddyProvider {
     async fn get_record(&self, domain: &str, record_type: &str, name: &str) -> Result<Option<(String, IpAddr)>> {
         let url = format!(
             "{}/v1/domains/{}/records/{}/{}",
-            GODADDY_API_BASE, domain, record_type, name
+            &self.api_base, domain, record_type, name
         );
 
         let response = self
@@ -282,7 +303,7 @@ impl GoDaddyProvider {
         record_type: &str,
         ip: IpAddr,
     ) -> Result<()> {
-        let url = format!("{}/v1/domains/{}/records", GODADDY_API_BASE, domain);
+        let url = format!("{}/v1/domains/{}/records", &self.api_base, domain);
 
         let payload = serde_json::json!([{
             "data": ip.to_string(),
@@ -343,7 +364,7 @@ impl GoDaddyProvider {
     ) -> Result<()> {
         let url = format!(
             "{}/v1/domains/{}/records/{}/{}",
-            GODADDY_API_BASE, domain, record_type, host
+            &self.api_base, domain, record_type, host
         );
 
         let payload = serde_json::json!([{
@@ -644,13 +665,24 @@ impl DnsProviderFactory for GoDaddyFactory {
             .to_lowercase()
             == "dry-run";
 
+        // Check if OTE (test) environment should be used
+        let ote = std::env::var("GODADDY_OTE")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "true";
+
         if dry_run {
             tracing::warn!("{} provider running in DRY-RUN mode", "godaddy");
+        }
+
+        if ote {
+            tracing::info!("{} provider using OTE (test) environment", "godaddy");
         }
 
         Ok(Box::new(GoDaddyProvider::new(
             api_key,
             api_secret,
+            ote,
             dry_run,
         )))
     }
