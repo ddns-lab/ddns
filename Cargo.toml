@@ -4,13 +4,16 @@ members = [
     "crates/ddns-core",
     "crates/ddnsd",
     "crates/ddns-provider-cloudflare",
+    "crates/ddns-provider-aliyun",
+    "crates/ddns-provider-namesilo",
+    "crates/ddns-provider-godaddy",
     "crates/ddns-ip-netlink",
     "crates/ddns-ip-http",
     "examples",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["DDNS Lab"]
