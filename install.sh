@@ -238,9 +238,24 @@ DDNS_IP_SOURCE_TYPE=netlink
 # DDNS_IP_SOURCE_VERSION=both  # Options: v4, v6, both (default: both)
 
 # DNS Provider Configuration
+# DDNS_PROVIDER_TYPE=cloudflare|aliyun|namesilo|godaddy
 DDNS_PROVIDER_TYPE=cloudflare
-DDNS_PROVIDER_API_TOKEN=your_api_token_here
-DDNS_PROVIDER_ZONE_ID=your_zone_id_here
+
+# Cloudflare Configuration (if DDNS_PROVIDER_TYPE=cloudflare)
+DDNS_CLOUDFLARE_API_TOKEN=your_api_token_here
+DDNS_CLOUDFLARE_ZONE_ID=your_zone_id_here
+
+# Aliyun Configuration (if DDNS_PROVIDER_TYPE=aliyun)
+# DDNS_ALIYUN_ACCESS_KEY_ID=your_access_key_id_here
+# DDNS_ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret_here
+
+# NameSilo Configuration (if DDNS_PROVIDER_TYPE=namesilo)
+# DDNS_NAMESILO_API_KEY=your_api_key_here
+
+# GoDaddy Configuration (if DDNS_PROVIDER_TYPE=godaddy)
+# DDNS_GODADDY_API_KEY=your_api_key_here
+# DDNS_GODADDY_API_SECRET=your_api_secret_here
+# DDNS_GODADDY_OTE=true  # Use test environment (optional)
 
 # Records to update (comma-separated)
 # Format: name[:type] where type is A, AAAA, or Auto
