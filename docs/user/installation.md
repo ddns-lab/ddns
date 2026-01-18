@@ -18,10 +18,7 @@ This will:
 - ✅ Create systemd service with auto-start on boot
 - ✅ Create configuration file at `/etc/ddnsd/ddnsd.env`
 
-**What happens next:**
-1. The installer will prompt for your Cloudflare API token and DNS records
-2. Configuration is saved to `/etc/ddnsd/ddnsd.env`
-3. The service is automatically enabled and started
+**Note**: When running via `curl | sh`, the installer automatically runs in non-interactive mode (no prompts). You'll need to edit the configuration file after installation.
 
 ---
 
@@ -49,9 +46,13 @@ This will:
 curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
 ```
 
-**Non-interactive mode** (for automation):
+**Non-interactive mode** (automatic in pipe installations):
 
 ```bash
+# Pipe mode (automatically non-interactive)
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
+
+# Explicitly enable non-interactive mode
 DDNS_NONINTERACTIVE=true curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
 ```
 
@@ -190,7 +191,19 @@ sudo journalctl -u ddnsd -n 20
 
 ## 🗑️ Uninstallation
 
-**Remove ddnsd** from your system:
+**One-line uninstall** (preserves configuration and state):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/uninstall.sh | sh
+```
+
+**Complete removal** (including configuration and state):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/uninstall.sh | sh -s -- --purge-all
+```
+
+**Manual uninstall** (if needed):
 
 ```bash
 # Stop and disable service

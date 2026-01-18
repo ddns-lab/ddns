@@ -7,13 +7,174 @@ Upgrading ddnsd between versions.
 ## 📋 Version Upgrade Paths
 
 **Current versions**:
-- v0.1.1 → v0.1.2 (documentation release)
-- v0.1.0 → v0.1.1 (previous feature release)
+- v0.2.0 → v0.2.1 (breaking change: environment variables)
+- v0.1.2 → v0.2.0 (major refactoring)
 
 **Supported upgrade paths**:
-- ✅ v0.1.0 → v0.1.2 (smooth upgrade, no breaking changes)
-- ✅ v0.1.1 → v0.1.2 (smooth upgrade, documentation only)
-- ✅ v0.1.2 → future versions (use standard upgrade procedure)
+- ✅ v0.2.0 → v0.2.1 (breaking change: config update required)
+- ⚠️ v0.1.x → v0.2.1 (breaking change: config update required)
+
+---
+
+## 🚨 v0.2.0 → v0.2.1 Upgrade
+
+### ⚠️ Breaking Change: Environment Variables
+
+**v0.2.1 removes backwards compatibility** with old environment variable names. All providers now require the `DDNS_` prefix.
+
+### Required Configuration Updates
+
+You **must** update your `/etc/ddnsd/ddnsd.env` to use new variable names:
+
+**Cloudflare**:
+```bash
+# OLD (no longer works in v0.2.1)
+DDNS_PROVIDER_API_TOKEN=xxx
+DDNS_PROVIDER_ZONE_ID=xxx
+
+# NEW (required)
+DDNS_CLOUDFLARE_API_TOKEN=xxx
+DDNS_CLOUDFLARE_ZONE_ID=xxx
+```
+
+**Aliyun**:
+```bash
+# OLD (no longer works in v0.2.1)
+DDNS_PROVIDER_API_TOKEN=xxx
+
+# NEW (required)
+DDNS_ALIYUN_ACCESS_KEY_ID=xxx
+DDNS_ALIYUN_ACCESS_KEY_SECRET=xxx
+```
+
+**NameSilo**:
+```bash
+# OLD (no longer works in v0.2.1)
+DDNS_PROVIDER_API_KEY=xxx
+
+# NEW (required)
+DDNS_NAMESILO_API_KEY=xxx
+```
+
+**GoDaddy**:
+```bash
+# OLD (no longer works in v0.2.1)
+DDNS_PROVIDER_API_KEY=xxx
+DDNS_PROVIDER_API_SECRET=xxx
+
+# NEW (required)
+DDNS_GODADDY_API_KEY=xxx
+DDNS_GODADDY_API_SECRET=xxx
+DDNS_GODADDY_OTE=true  # optional
+```
+
+---
+
+### Upgrade Procedure
+
+**Step 1: Uninstall v0.2.0**
+
+```bash
+# Complete uninstall (preserves config)
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/uninstall.sh | sh
+```
+
+---
+
+**Step 2: Backup and Update Configuration**
+
+```bash
+# Backup old config
+sudo cp /etc/ddnsd/ddnsd.env /etc/ddnsd/ddnsd.env.v0.2.0.backup
+
+# Update config to use new variable names
+sudo vi /etc/ddnsd/ddnsd.env
+```
+
+**Replace old variable names with new ones** (see examples above).
+
+---
+
+**Step 3: Reinstall v0.2.1**
+
+```bash
+# Install v0.2.1
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
+
+# The installer will preserve your updated config
+```
+
+---
+
+**Step 4: Verify v0.2.1**
+
+```bash
+# Check version
+ddnsd --version
+# Expected: ddnsd 0.2.1
+
+# Start service
+sudo systemctl start ddnsd
+
+# Check service status
+sudo systemctl status ddnsd
+
+# Check logs for errors
+sudo journalctl -u ddnsd -n 50
+```
+
+---
+
+### What's New in v0.2.1
+
+- ✅ Clean environment variable naming (all DDNS_ prefix)
+- ✅ Provider-specific credentials (no generic DDNS_PROVIDER_API_TOKEN)
+- ✅ Added `uninstall.sh` script for complete removal
+- ✅ Auto-detection of non-interactive mode in pipe installations
+- ✅ Tested on Linux with all providers
+
+---
+
+### Migration Checklist
+
+- [ ] Backup old configuration file
+- [ ] Update all environment variable names to use DDNS_ prefix
+- [ ] Verify provider-specific variables are correct
+- [ ] Uninstall v0.2.0
+- [ ] Install v0.2.1
+- [ ] Verify version: `ddnsd --version` shows `0.2.1`
+- [ ] Service starts without errors
+- [ ] Check logs: no "environment variable not found" errors
+- [ ] DNS updates working correctly
+
+---
+
+## 🚀 v0.1.2 → v0.2.1 Upgrade
+
+### ⚠️ Breaking Change: Environment Variables
+
+Upgrading from v0.1.x to v0.2.1 requires configuration updates. See the v0.2.0 → v0.2.1 section above for detailed migration instructions.
+
+**Summary of changes**:
+- Old generic variables (`DDNS_PROVIDER_API_TOKEN`) no longer supported
+- All providers use DDNS_ prefix
+- Provider-specific variables are now required
+
+**Quick migration from v0.1.x**:
+
+```bash
+# 1. Uninstall v0.1.x
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/uninstall.sh | sh -s -- --purge-all
+
+# 2. Install v0.2.1 (generates new config template)
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
+
+# 3. Edit config with new variable names
+sudo vi /etc/ddnsd/ddnsd.env
+
+# 4. Start service
+sudo systemctl start ddnsd
+```
 
 ---
 
@@ -117,7 +278,7 @@ curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
 
 **The installer will**:
 - Detect existing installation
-- Prompt for confirmation (unless `DDNS_NONINTERACTIVE=true`)
+- Prompt for confirmation (unless running in non-interactive mode)
 - Replace the binary
 - **Preserve your configuration** (`/etc/ddnsd/ddnsd.env`)
 - **Preserve your state** (`/var/lib/ddnsd/state.json`)
@@ -204,7 +365,7 @@ ERROR: API call failed
 
 # v0.1.1
 ERROR: API call failed: 401 Unauthorized
-       Check your DDNS_PROVIDER_API_TOKEN
+       Check your DDNS_CLOUDFLARE_API_TOKEN
 ```
 
 #### Enhanced Logging
@@ -229,17 +390,17 @@ INFO Ready, monitoring for IP changes...
 
 ## 🔄 Rollback Procedure
 
-**If you need to rollback to v0.1.0**:
+**If you need to rollback to a previous version**:
 
 **Step 1: Stop service**
 ```bash
 sudo systemctl stop ddnsd
 ```
 
-**Step 2: Restore v0.1.0 binary**
+**Step 2: Restore previous binary**
 ```bash
-# Download v0.1.0 binary
-wget https://github.com/ddns-lab/ddns/releases/download/v0.1.0/ddnsd-linux-amd64.tar.gz
+# Download specific version binary
+wget https://github.com/ddns-lab/ddns/releases/download/v0.2.0/ddnsd-linux-amd64.tar.gz
 
 # Extract
 tar -xzf ddnsd-linux-amd64.tar.gz
@@ -261,7 +422,7 @@ sudo systemctl start ddnsd
 **Step 5: Verify**
 ```bash
 ddnsd --version
-# Expected: ddnsd v0.1.0
+# Expected: ddnsd v0.2.0 (or whatever version you rolled back to)
 ```
 
 ---
@@ -319,7 +480,7 @@ bash -x install.sh 2>&1 | tee /tmp/install.log
 sudo journalctl -u ddnsd -n 100
 
 # Test configuration manually
-sudo -u root ddnsd --once
+sudo ddnsd --config-test
 
 # If configuration is issue, restore backup
 sudo cp /etc/ddnsd/ddnsd.env.backup-YYYYMMDD /etc/ddnsd/ddnsd.env
@@ -338,12 +499,35 @@ sudo systemctl restart ddnsd
 sudo journalctl -u ddnsd -p err -n 20
 
 # Verify API token still valid
+# For Cloudflare:
 curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json"
 
 # Check if new features require configuration changes
-# (v0.1.1 doesn't require changes)
+# See migration guide for your version
+```
+
+---
+
+### Issue: Environment Variable Not Found
+
+**Symptom** (v0.2.0 → v0.2.1 upgrade):
+```
+Configuration error: DDNS_CLOUDFLARE_API_TOKEN is required
+```
+
+**Solution**:
+```bash
+# You need to update your config file
+sudo vi /etc/ddnsd/ddnsd.env
+
+# Change old variable names to new ones:
+# DDNS_PROVIDER_API_TOKEN → DDNS_CLOUDFLARE_API_TOKEN
+# DDNS_PROVIDER_ZONE_ID → DDNS_CLOUDFLARE_ZONE_ID
+
+# Restart service
+sudo systemctl restart ddnsd
 ```
 
 ---
