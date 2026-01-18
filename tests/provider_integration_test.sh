@@ -153,6 +153,12 @@ check_env_vars() {
         aliyun)
             vars="ALIYUN_ACCESS_KEY_ID ALIYUN_ACCESS_KEY_SECRET"
             ;;
+        namesilo)
+            vars="NAMESILO_API_KEY"
+            ;;
+        godaddy)
+            vars="GODADDY_API_KEY GODADDY_API_SECRET"
+            ;;
         *)
             log_error "Unknown provider: $provider"
             exit 1
@@ -210,6 +216,29 @@ start_ddnsd() {
             export ALIYUN_ACCESS_KEY_ID="$ALIYUN_ACCESS_KEY_ID"
             export ALIYUN_ACCESS_KEY_SECRET="$ALIYUN_ACCESS_KEY_SECRET"
             export DDNS_PROVIDER_API_TOKEN="$ALIYUN_ACCESS_KEY_ID"
+            export DDNS_RECORDS="${FULL_TEST_RECORD}"
+            export DDNS_STATE_STORE_TYPE=memory
+            export DDNS_LOG_LEVEL=debug
+            export RUST_LOG=debug
+            ;;
+        namesilo)
+            export DDNS_IP_SOURCE_TYPE=netlink
+            export DDNS_IP_SOURCE_INTERFACE=
+            export DDNS_PROVIDER_TYPE=namesilo
+            export NAMESILO_API_KEY="$NAMESILO_API_KEY"
+            export DDNS_PROVIDER_API_TOKEN="$NAMESILO_API_KEY"
+            export DDNS_RECORDS="${FULL_TEST_RECORD}"
+            export DDNS_STATE_STORE_TYPE=memory
+            export DDNS_LOG_LEVEL=debug
+            export RUST_LOG=debug
+            ;;
+        godaddy)
+            export DDNS_IP_SOURCE_TYPE=netlink
+            export DDNS_IP_SOURCE_INTERFACE=
+            export DDNS_PROVIDER_TYPE=godaddy
+            export GODADDY_API_KEY="$GODADDY_API_KEY"
+            export GODADDY_API_SECRET="$GODADDY_API_SECRET"
+            export DDNS_PROVIDER_API_TOKEN="$GODADDY_API_KEY"
             export DDNS_RECORDS="${FULL_TEST_RECORD}"
             export DDNS_STATE_STORE_TYPE=memory
             export DDNS_LOG_LEVEL=debug
@@ -365,13 +394,117 @@ test_aliyun() {
     return 0
 }
 
+# NameSilo-specific test
+test_namesilo() {
+    FULL_TEST_RECORD="ddns-integration-test.atlanssia.com"
+
+    log_section "NameSilo Provider Integration Test"
+    log_info "Test domain: ${FULL_TEST_RECORD}"
+
+    # Start ddnsd
+    start_ddnsd "namesilo"
+
+    # Test 1: DNS Creation
+    log_section "Test 1: DNS Record Creation"
+    log_info "Adding first IP: $TEST_IPV4_1"
+
+    ip addr add "${TEST_IPV4_1}/24" dev "$VETH_INTERFACE"
+    sleep 5
+
+    if verify_dns "$TEST_IPV4_1" 20; then
+        log_info "✓ DNS creation successful"
+    else
+        log_error "✗ DNS creation failed"
+        return 3
+    fi
+
+    # Test 2: DNS Update
+    log_section "Test 2: DNS Record Update"
+    log_info "Waiting 65 seconds to respect rate limiting (min 60s between updates)"
+    sleep 65
+
+    log_info "Adding second IP: $TEST_IPV4_2"
+
+    ip addr del "${TEST_IPV4_1}/24" dev "$VETH_INTERFACE" 2>/dev/null || true
+    sleep 1
+    ip addr add "${TEST_IPV4_2}/24" dev "$VETH_INTERFACE"
+    sleep 5
+
+    if verify_dns "$TEST_IPV4_2" 20; then
+        log_info "✓ DNS update successful"
+    else
+        log_error "✗ DNS update failed"
+        return 4
+    fi
+
+    log_section "NameSilo Test Summary"
+    log_info "✓ DNS creation: PASS"
+    log_info "✓ DNS update: PASS"
+    log_info "✓ Netlink events: 2"
+    log_info "✓ NameSilo provider: READY"
+
+    return 0
+}
+
+# GoDaddy-specific test
+test_godaddy() {
+    FULL_TEST_RECORD="ddns-integration-test.g6pdd.net"
+
+    log_section "GoDaddy Provider Integration Test"
+    log_info "Test domain: ${FULL_TEST_RECORD}"
+
+    # Start ddnsd
+    start_ddnsd "godaddy"
+
+    # Test 1: DNS Creation
+    log_section "Test 1: DNS Record Creation"
+    log_info "Adding first IP: $TEST_IPV4_1"
+
+    ip addr add "${TEST_IPV4_1}/24" dev "$VETH_INTERFACE"
+    sleep 5
+
+    if verify_dns "$TEST_IPV4_1" 20; then
+        log_info "✓ DNS creation successful"
+    else
+        log_error "✗ DNS creation failed"
+        return 3
+    fi
+
+    # Test 2: DNS Update
+    log_section "Test 2: DNS Record Update"
+    log_info "Waiting 65 seconds to respect rate limiting (min 60s between updates)"
+    sleep 65
+
+    log_info "Adding second IP: $TEST_IPV4_2"
+
+    ip addr del "${TEST_IPV4_1}/24" dev "$VETH_INTERFACE" 2>/dev/null || true
+    sleep 1
+    ip addr add "${TEST_IPV4_2}/24" dev "$VETH_INTERFACE"
+    sleep 5
+
+    if verify_dns "$TEST_IPV4_2" 20; then
+        log_info "✓ DNS update successful"
+    else
+        log_error "✗ DNS update failed"
+        return 4
+    fi
+
+    log_section "GoDaddy Test Summary"
+    log_info "✓ DNS creation: PASS"
+    log_info "✓ DNS update: PASS"
+    log_info "✓ Netlink events: 2"
+    log_info "✓ GoDaddy provider: READY"
+
+    return 0
+}
+
 # Main test runner
 main() {
     local provider=$1
 
     if [ -z "$provider" ]; then
         log_error "Usage: $0 <provider>"
-        log_error "Supported providers: cloudflare, aliyun"
+        log_error "Supported providers: cloudflare, aliyun, namesilo, godaddy"
         exit 1
     fi
 
@@ -393,6 +526,14 @@ main() {
             ;;
         aliyun)
             test_aliyun
+            test_result=$?
+            ;;
+        namesilo)
+            test_namesilo
+            test_result=$?
+            ;;
+        godaddy)
+            test_godaddy
             test_result=$?
             ;;
         *)
