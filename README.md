@@ -4,16 +4,74 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://www.rust-lang.org)
 [![GitHub Release](https://img.shields.io/github/v/release/ddns-lab/ddns)](https://github.com/ddns-lab/ddns/releases/latest)
-[![Stars](https://img.shields.io/github/stars/ddns-lab/ddns?style=social)](https://github.com/ddns-lab/ddns/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/ddns-lab/ddns/total.svg)](https://github.com/ddns-lab/ddns/releases)
-[![Issues](https://img.shields.io/github/issues/ddns-lab/ddns)](https://github.com/ddns-lab/ddns/issues)
-[![codecov](https://codecov.io/gh/ddns-lab/ddns/branch/main/graph/badge.svg)](https://codecov.io/gh/ddns-lab/ddns)
 
 An event-driven Dynamic DNS system built with Rust, designed for high performance and **minimal resource consumption**.
 
-## 🚀 Resource Efficiency
+---
 
-**Extreme resource efficiency through Rust's zero-cost abstractions and event-driven design:**
+## 🚀 Quick Start
+
+### One-Line Installation (Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
+```
+
+This will:
+- Download the latest binary
+- Install to `/usr/local/bin/ddnsd`
+- Create systemd service with auto-start on boot
+- Configure via `/etc/ddnsd/ddnsd.env`
+
+### Quick Configuration
+
+Edit `/etc/ddnsd/ddnsd.env`:
+
+```bash
+# Provider selection
+DDNS_PROVIDER_TYPE=cloudflare
+DDNS_CLOUDFLARE_API_TOKEN=your_api_token_here
+
+# Records to update
+DDNS_RECORDS=ddns.example.com
+
+# IP source (Linux netlink - event driven)
+DDNS_IP_SOURCE_TYPE=netlink
+```
+
+Start the service:
+
+```bash
+sudo systemctl start ddnsd
+sudo systemctl enable ddnsd  # Auto-start on boot
+sudo systemctl status ddnsd
+```
+
+---
+
+## 📖 Documentation
+
+### For Users
+
+**Getting Started**:
+- [Installation Guide](docs/user/installation.md) - Detailed installation options
+- [Configuration Guide](docs/user/configuration.md) - Complete environment variable reference
+- [Troubleshooting Guide](docs/user/troubleshooting.md) - Common issues and solutions
+
+**Advanced**:
+- [Deployment Guide](docs/user/deployment.md) - Systemd deployment and verification
+- [Migration Guide](docs/user/migration.md) - Version upgrade instructions
+
+### For Developers
+
+**Architecture**:
+- [Architecture Documentation](docs/architecture/) - System design and component boundaries
+- [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) - **Mandatory** architectural constraints
+- [`CLAUDE.md`](CLAUDE.md) - Comprehensive development guide
+
+---
+
+## ⚡ Performance
 
 | Metric | Value | Comparison |
 |--------|-------|-------------|
@@ -21,7 +79,6 @@ An event-driven Dynamic DNS system built with Rust, designed for high performanc
 | **Memory Usage** | **~13 MB RSS** | Fraction of Go/Python implementations (100-500MB+) |
 | **Startup Time** | **~20 ms** | Near-instant, no JVM warmup |
 | **CPU Idle** | **~0%** | Event-driven, no polling threads |
-| **Static Linking** | Optional | Single binary deployment, no runtime deps |
 
 **Why so efficient?**
 
@@ -29,30 +86,149 @@ An event-driven Dynamic DNS system built with Rust, designed for high performanc
 - ✅ **Event-driven architecture**: No polling, no background threads
 - ✅ **No garbage collection**: Deterministic memory usage, no GC pauses
 - ✅ **Minimal runtime**: No VM, no interpreter, bare metal performance
-- ✅ **Smart dependencies**: Only what you need, async I/O over blocking calls
 
-## Project Goals
+---
 
-- **Extreme resource efficiency**: Minimal overhead, 3.5MB binary, ~13MB RAM
-- **Event-driven**: React to IP changes instantly via Linux Netlink (no polling)
-- **Zero-cost abstractions**: Rust's safety without performance penalty
-- **Long-term stability**: Clear architecture, well-defined boundaries
-- **Library-first**: Core logic reusable as a Rust library
-- **Production-ready**: Comprehensive validation and error handling
+## 🌐 Supported DNS Providers
 
-## Features
+### Production Ready ✅
 
-- ✅ **Ultra-lightweight**: 3.5MB binary, ~13MB RAM, 20ms startup
-- ✅ **Event-driven architecture**: React to network changes instantly via Linux Netlink (no polling)
-- ✅ **Idempotency**: Prevents unnecessary DNS updates via state tracking
-- ✅ **Provider plugin system**: Easy to add new DNS providers
-- ✅ **Cloudflare integration**: Production-ready with auto-create, A/AAAA records
-- ✅ **Dry-run mode**: Safe testing without making actual changes
-- ✅ **Comprehensive error handling**: Clear error messages for all failure scenarios
-- ✅ **Security-first**: API tokens never logged, env var config only
-- ✅ **CI/CD**: GitHub Actions for testing, security auditing, and multi-platform builds
+| Provider | Status | DNS Propagation |
+|----------|--------|-----------------|
+| **Cloudflare** | ✅ Production Ready | <5 seconds |
+| **Aliyun** | ✅ Core Verified | ~20 seconds |
+| **NameSilo** | ✅ Production Ready | >20 seconds |
 
-## Architecture
+### Code Ready 🟡
+
+| Provider | Status | Notes |
+|----------|--------|-------|
+| **GoDaddy** | 🟡 Code Ready | Implementation verified, pending network test |
+
+### Environment Variables
+
+All provider credentials use `DDNS_` prefix:
+
+**Cloudflare**:
+```bash
+DDNS_CLOUDFLARE_API_TOKEN=your_token
+DDNS_CLOUDFLARE_ZONE_ID=your_zone_id  # optional
+```
+
+**Aliyun**:
+```bash
+DDNS_ALIYUN_ACCESS_KEY_ID=your_key_id
+DDNS_ALIYUN_ACCESS_KEY_SECRET=your_secret
+```
+
+**NameSilo**:
+```bash
+DDNS_NAMESILO_API_KEY=your_api_key
+```
+
+**GoDaddy**:
+```bash
+DDNS_GODADDY_API_KEY=your_key
+DDNS_GODADDY_API_SECRET=your_secret
+DDNS_GODADDY_OTE=true  # optional: use test environment
+```
+
+> **Note**: Old environment variable names without `DDNS_` prefix are still supported for backwards compatibility.
+
+---
+
+## 🧪 Testing
+
+### Build from Source
+
+```bash
+git clone https://github.com/ddns-lab/ddns.git
+cd ddns
+cargo build --release --bin ddnsd --features all
+```
+
+### Run Tests
+
+```bash
+# Mock tests only (no network required)
+cargo test
+
+# All tests (Linux only - requires root)
+sudo cargo test -- --ignored
+```
+
+---
+
+## 📋 Requirements
+
+### System Requirements
+
+- **OS**: Linux (recommended), macOS, Windows
+- **Memory**: ~13 MB RAM
+- **Disk**: 3.5 MB binary size
+- **Privileges**: None required for HTTP IP source
+- **Privileges**: CAP_NET_ADMIN for netlink IP source (usually root/sudo)
+
+### DNS Provider Account
+
+You need an account with one of the supported providers:
+- [Cloudflare](https://cloudflare.com) - Free tier available
+- [Aliyun](https://aliyun.com) - Alibaba Cloud DNS
+- [NameSilo](https://namesilo.com) - Budget DNS provider
+- GoDaddy - Paid DNS service
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+#### Core Settings
+
+```bash
+# Provider selection (required)
+DDNS_PROVIDER_TYPE=cloudflare|aliyun|namesilo|godaddy
+
+# Records to update (required, comma-separated)
+DDNS_RECORDS=example.com,www.example.com
+
+# IP source (default: netlink)
+DDNS_IP_SOURCE_TYPE=netlink|http
+
+# State storage (default: file)
+DDNS_STATE_STORE_TYPE=file|memory
+
+# Log level (default: info)
+DDNS_LOG_LEVEL=trace|debug|info|warn|error
+```
+
+#### Provider-Specific Settings
+
+See [Configuration Guide](docs/user/configuration.md) for complete reference.
+
+---
+
+## ❓ Troubleshooting
+
+### Common Issues
+
+**Problem**: `ddnsd: command not found`
+- **Solution**: Binary not in PATH. Use full path: `/usr/local/bin/ddnsd`
+
+**Problem**: `Permission denied` when creating netlink socket
+- **Solution**: Run with sudo or add CAP_NET_ADMIN capability
+
+**Problem**: DNS records not updating
+- **Solution**: Check provider credentials and verify API token permissions
+
+**Problem**: "Record not found" error
+- **Solution**: Some providers auto-create records (Cloudflare, NameSilo), others require manual creation first
+
+For more solutions, see [Troubleshooting Guide](docs/user/troubleshooting.md).
+
+---
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
@@ -67,271 +243,52 @@ An event-driven Dynamic DNS system built with Rust, designed for high performanc
                      └──────────────┘
 ```
 
-## Project Structure
+**Key Design Principles**:
+- ✅ **Event-driven**: React to IP changes instantly via Linux Netlink
+- ✅ **Idempotent**: Prevents unnecessary DNS updates via state tracking
+- ✅ **Plugin architecture**: Easy to add new DNS providers
+- ✅ **Zero-cost abstractions**: Rust safety without performance penalty
 
-```
-ddns/
-├── .ai/                         # AI development contracts
-│   ├── AI_CONTRACT.md           # ⚠️ Non-negotiable architectural constraints
-│   └── QUICK_START.md           # Quick reference for AI agents
-├── .github/workflows/           # CI/CD pipelines
-│   ├── ci.yml                   # Test, lint, security audit
-│   └── release.yml              # Automated releases
-├── crates/
-│   ├── ddns-core/               # Core library (traits, engine, registry)
-│   ├── ddnsd/                   # Daemon binary
-│   ├── ddns-provider-cloudflare/ # Cloudflare DNS provider ✅
-│   ├── ddns-provider-aliyun/    # Aliyun DNS provider ✅
-│   ├── ddns-provider-namesilo/  # NameSilo DNS provider ✅
-│   ├── ddns-provider-godaddy/   # GoDaddy DNS provider 🟡
-│   ├── ddns-ip-netlink/         # Netlink IP source (Linux) ✅
-│   └── ddns-ip-http/            # HTTP IP source (fallback) ✅
-├── docs/                        # Architecture documentation
-│   ├── architecture/            # System design documentation
-│   ├── operations/              # Operations guides
-│   ├── user/                    # User guides
-│   └── README.md                # Documentation index
-├── tests/                       # Integration tests
-│   └── provider_integration_test.sh  # Provider validation framework
-├── TEST_REQUIREMENTS.md         # Provider testing requirements and results
-├── install.sh                   # One-line installer (Linux)
-├── CLAUDE.md                    # Comprehensive development guide
-└── README.md
-```
+---
 
-## 📚 Documentation
+## 📚 More Documentation
 
-**New to ddns?** Start with [📖 User Guide](docs/user/)
+**Full Documentation**: [docs/README.md](docs/README.md)
 
-**Need help?** See [🔧 Troubleshooting](docs/user/troubleshooting.md)
+**Key Documents**:
+- [Installation](docs/user/installation.md) - 3 ways to install
+- [Configuration](docs/user/configuration.md) - Complete env var reference
+- [Troubleshooting](docs/user/troubleshooting.md) - 10 common issues
+- [Operations](docs/operations/ops.md) - Process lifecycle and signals
+- [Security](docs/security/security.md) - Security best practices
 
-**Full documentation**: [docs/README.md](docs/README.md)
+---
 
-### Key Documentation
+## 🤝 Contributing
 
-**User Documentation**:
-- [Installation Guide](docs/user/installation.md) - 3 ways to install ddnsd
-- [Configuration Guide](docs/user/configuration.md) - Complete environment variable reference
-- [Deployment Guide](docs/user/deployment.md) - systemd deployment and verification
-- [Troubleshooting Guide](docs/user/troubleshooting.md) - Common issues and solutions
-- [Migration Guide](docs/user/migration.md) - Version upgrade instructions
+Please read [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) before contributing. This project has strict architectural constraints that must be followed.
 
-**Operations Documentation**:
-- [Crash Recovery](docs/operations/crash-recovery.md) - State corruption and recovery
-- [Observability](docs/operations/observability.md) - Logging, metrics, health checks
-- [Operations](docs/operations/ops.md) - Signal handling and process lifecycle
-- [Secret Rotation](docs/operations/secret-rotation.md) - API token rotation procedures
-- [Monitoring](docs/operations/monitoring.md) - Production monitoring integration
-
-**Architecture & Development**:
-- [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) - **Mandatory** architectural constraints for all development
-- [`CLAUDE.md`](CLAUDE.md) - Comprehensive development guide
-- [Architecture Documentation](docs/architecture/) - System design and boundaries
-- [`.ai/QUICK_START.md`](.ai/QUICK_START.md) - Quick reference for contributors
-
-**Other**:
-- [Security Guide](docs/security/security.md) - Security best practices
-- [Versioning Policy](docs/meta/versioning.md) - Semantic versioning
-- [Changelog](docs/meta/changelog.md) - Complete change history
-
-## Implementation Status
-
-### ✅ Production-Ready
-
-**Core Components:**
-- ✅ **Event-driven engine**: Async orchestration with idempotency & retry logic
-- ✅ **Provider registry**: Plugin system for dynamic provider/IP source registration
-- ✅ **State management**: File & Memory stores with atomic writes and backup recovery
-
-**IP Sources:**
-- ✅ **Netlink IP source** (`ddns-ip-netlink`): Linux kernel event-driven (RTM_NEWADDR/RTM_DELADDR)
-- ✅ **HTTP IP source** (`ddns-ip-http`): Polling-based with configurable interval
-- ✅ **IPv4/IPv6 support**: Auto-detection or explicit version selection
-
-**DNS Providers:**
-- ✅ **Cloudflare** (`ddns-provider-cloudflare`):
-  - Automatic zone discovery
-  - A/AAAA record updates (IPv4/IPv6)
-  - **Auto-create records**: Creates missing records automatically
-  - Dry-run mode for safe testing
-  - Comprehensive error handling and validation
-  - **Status**: ✅ Production Ready (tested, <5s DNS propagation)
-
-- ✅ **Aliyun** (`ddns-provider-aliyun`):
-  - Alibaba Cloud DNS integration
-  - A/AAAA record updates
-  - HMAC-SHA1 signature authentication
-  - **Status**: ✅ Core functionality verified (20+s DNS propagation)
-
-- ✅ **NameSilo** (`ddns-provider-namesilo`):
-  - Budget DNS provider integration
-  - Automatic record creation and updates
-  - API key authentication
-  - **Status**: ✅ Production Ready (tested, >20s DNS propagation)
-
-- 🟡 **GoDaddy** (`ddns-provider-godaddy`):
-  - GoDaddy DNS integration
-  - OTE (test) and Production environment support
-  - sso-key authentication format
-  - **Status**: 🟡 Code Ready (implementation verified, network testing pending)
-  - **Note**: Code quality ⭐⭐⭐⭐⭐, pending server environment test
-
-**Daemon & Deployment:**
-- ✅ **ddnsd binary**: Complete daemon with signal handling (SIGTERM/SIGINT)
-- ✅ **Environment variable config**: No config files needed
-- ✅ **Systemd integration**: `install.sh` with auto-start on boot
-- ✅ **Automated releases**: GitHub Actions with multi-platform builds
-- ✅ **Installer script**: One-line installation with upgrade support
-
-**Testing & Quality:**
-- ✅ **Architectural contract tests**: Event-driven, idempotency, retry logic
-- ✅ **Comprehensive validation**: Real environment Cloudflare testing
-- ✅ **CI/CD**: GitHub Actions for test, lint, security audit, releases
-
-### 📋 Upcoming Features
-
-- **Additional DNS providers**: Route53, DigitalOcean, Namecheap, GoDaddy (network testing pending)
-- **macOS/Windows support**: Native IP change detection (FSEvents/WSA)
-- **Web UI**: Optional dashboard for monitoring and configuration
-- **Metrics export**: Prometheus integration for observability
-- **Configuration profiles**: Multiple DNS provider support
-
-## Quick Start
-
-### One-Line Installation (Linux)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ddns-lab/ddns/main/install.sh | sh
-```
-
-This will:
-- Download the latest binary for your platform
-- Install to `/usr/local/bin/ddnsd`
-- Create systemd service with auto-start on boot
-- Configure via `/etc/ddnsd/ddnsd.env`
-
-See [`install.sh`](install.sh) for advanced options (non-interactive mode, custom paths, etc.).
-
-### Manual Configuration
-
-1. **Edit configuration:**
-```bash
-sudo vi /etc/ddnsd/ddnsd.env
-```
-
-2. **Configure your Cloudflare API token and records:**
-```bash
-# Cloudflare Configuration
-DDNS_PROVIDER_TYPE=cloudflare
-DDNS_PROVIDER_API_TOKEN=your_api_token_here
-DDNS_PROVIDER_ZONE_ID=your_zone_id_here
-
-# Records to update (comma-separated)
-# Format: name:type (type: A, AAAA, or Auto)
-DDNS_RECORDS=example.com:A,www.example.com:AAAA
-
-# IP Source Configuration
-DDNS_IP_SOURCE_TYPE=netlink  # or "http"
-# DDNS_IP_SOURCE_INTERFACE=eth0  # for netlink
-# DDNS_IP_SOURCE_URL=https://icanhazip.com  # for http
-# DDNS_IP_SOURCE_INTERVAL=300  # for http (seconds)
-# DDNS_IP_SOURCE_VERSION=both  # Options: v4, v6, both
-```
-
-3. **Start the service:**
-```bash
-sudo systemctl start ddnsd
-sudo systemctl enable ddnsd  # Auto-start on boot
-```
-
-4. **Check status and logs:**
-```bash
-sudo systemctl status ddnsd
-sudo journalctl -u ddnsd -f  # Follow logs
-```
-
-### Build from Source
+### Development
 
 ```bash
 # Clone repository
 git clone https://github.com/ddns-lab/ddns.git
 cd ddns
 
-# Build with all features
-cargo build --release --bin ddnsd --features all
-
-# Run directly
-./target/release/ddnsd --version
-```
-
-## Usage Examples
-
-### Example 1: Update IPv4 A Record
-
-```bash
-export DDNS_IP_SOURCE_TYPE=netlink
-export DDNS_IP_SOURCE_VERSION=v4
-export DDNS_PROVIDER_TYPE=cloudflare
-export DDNS_PROVIDER_API_TOKEN=your_token
-export DDNS_RECORDS=example.com:A
-
-ddnsd
-```
-
-### Example 2: Update Both IPv4 and IPv6
-
-```bash
-export DDNS_IP_SOURCE_TYPE=netlink
-export DDNS_IP_SOURCE_VERSION=both
-export DDNS_PROVIDER_TYPE=cloudflare
-export DDNS_PROVIDER_API_TOKEN=your_token
-export DDNS_RECORDS=example.com:A,example.com:AAAA
-
-ddnsd
-```
-
-### Example 3: HTTP Polling (Fallback for Non-Linux)
-
-```bash
-export DDNS_IP_SOURCE_TYPE=http
-export DDNS_IP_SOURCE_URL=https://icanhazip.com
-export DDNS_IP_SOURCE_INTERVAL=300  # 5 minutes
-export DDNS_PROVIDER_TYPE=cloudflare
-export DDNS_PROVIDER_API_TOKEN=your_token
-export DDNS_RECORDS=ddns.example.com
-
-ddnsd
-```
-
-## Development
-
-```bash
-# Build all crates
+# Build
 cargo build
-
-# Build with optimizations
-cargo build --release
 
 # Run tests
 cargo test
-
-# Run tests for specific crate
-cargo test -p ddns-core
-cargo test -p ddns-provider-cloudflare
 
 # Format code
 cargo fmt
 
 # Run linter
 cargo clippy
-
-# Check without building
-cargo check
 ```
 
-## Adding New Providers
-
-To add a new DNS provider:
+### Adding New Providers
 
 1. Create new crate: `crates/ddns-provider-{name}/`
 2. Implement `DnsProvider` trait from `ddns-core`
@@ -340,74 +297,37 @@ To add a new DNS provider:
 5. Add as optional dependency to `ddnsd/Cargo.toml`
 6. Add feature flag in `ddnsd/Cargo.toml`
 
-See [`ddns-provider-cloudflare`](crates/ddns-provider-cloudflare/) as a reference implementation.
+---
 
-## License
+## 📄 License
 
 Apache License 2.0
 
-## Contributing
+---
 
-Please read [`.ai/AI_CONTRACT.md`](.ai/AI_CONTRACT.md) before contributing. This project has strict architectural constraints that must be followed.
+## 🎯 Project Goals
 
-### CI/CD Status
+- **Extreme resource efficiency**: Minimal overhead, 3.5MB binary, ~13MB RAM
+- **Event-driven**: React to IP changes instantly via Linux Netlink (no polling)
+- **Zero-cost abstractions**: Rust's safety without performance penalty
+- **Long-term stability**: Clear architecture, well-defined boundaries
+- **Library-first**: Core logic reusable as a Rust library
+- **Production-ready**: Comprehensive validation and error handling
 
-This project uses GitHub Actions for continuous integration and deployment:
+---
 
-- ✅ **CI**: Tests, formatting checks, and linting on every push and PR
-- ✅ **Security Audit**: Automated dependency vulnerability scanning
-- ✅ **Releases**: Automated multi-platform builds with GitHub release notes
-- ✅ **Coverage**: Code coverage tracking (Codecov)
+## 🌟 Features
 
-[![CI](https://img.shields.io/github/actions/workflow/status/ddns-lab/ddns/ci.yml?branch=main)](https://github.com/ddns-lab/ddns/actions/workflows/ci.yml)
+- ✅ **Ultra-lightweight**: 3.5MB binary, ~13MB RAM, 20ms startup
+- ✅ **Event-driven architecture**: React to network changes instantly via Linux Netlink
+- ✅ **Idempotency**: Prevents unnecessary DNS updates via state tracking
+- ✅ **Provider plugin system**: Easy to add new DNS providers
+- ✅ **Multi-provider support**: Cloudflare, Aliyun, NameSilo, GoDaddy
+- ✅ **Dry-run mode**: Safe testing without making actual changes
+- ✅ **Comprehensive error handling**: Clear error messages for all failure scenarios
+- ✅ **Security-first**: API tokens never logged, env var config only
+- ✅ **CI/CD**: GitHub Actions for testing, security auditing, and multi-platform builds
 
-All checks must pass before code can be merged into main.
+---
 
-## Changelog
-
-### v0.2.0 (2026-01-18)
-- 🎉 **Multi-provider support**: Added 3 new DNS providers
-  - ✅ **Aliyun provider**: Alibaba Cloud DNS integration with HMAC-SHA1 authentication
-  - ✅ **NameSilo provider**: Budget DNS provider with auto-create support
-  - 🟡 **GoDaddy provider**: OTE/Production environments, sso-key authentication
-- 🧪 **Integration testing framework**: Comprehensive provider validation
-  - Event-driven testing with real netlink events
-  - Automatic DNS record creation and update tests
-  - Provider status tracking and documentation
-- 📚 **Documentation**:
-  - TEST_REQUIREMENTS.md: Detailed test requirements and results
-  - GoDaddy analysis with StackOverflow verification
-  - Updated README with provider status
-- 🐛 **Bug fixes**:
-  - NameSilo: API URL format (`/api/{operation}` not `/api?action=...`)
-  - NameSilo: Response field parsing (`resource_record` not `records`)
-  - GoDaddy: Authentication format (`sso-key key:secret` not Basic Auth)
-  - Engine: Startup without initial IP
-- 🧹 **Cleanup**: Moved analysis docs to docs/operations/
-
-### v0.1.2 (2025-01-15)
-- 📚 **Docs**: Comprehensive documentation refactor (user/operations/architecture)
-- 📚 **Docs**: Added troubleshooting guide with 10 common issues
-- 📚 **Docs**: Added migration guide for version upgrades
-- 📚 **Docs**: Removed hardcoded version numbers for easier maintenance
-- 🧹 **Cleanup**: Removed duplicate documentation and unimplemented features
-- ✨ **Feature**: Documentation now categorized by user type
-
-### v0.1.1 (2025-01-14)
-- ✨ **Auto-create DNS records**: Automatically creates missing DNS records
-- 🐛 **Fix**: Cloudflare API 400 error (missing 'name' field in PUT request)
-- 🐛 **Fix**: Daemon crash after 30 seconds (removed timeout on shutdown wait)
-- 🐛 **Fix**: Initial DNS update not triggered on startup
-- 📝 **Docs**: Automatic release notes generation from commit history
-- 🧪 **Tests**: Fixed architectural contract tests with `run_for_testing()`
-
-### v0.1.0 (2025-01-13)
-- 🎉 **Initial release**: Event-driven DDNS system with:
-  - Linux Netlink IP source (RTM_NEWADDR/RTM_DELADDR)
-  - HTTP polling IP source (fallback for non-Linux)
-  - Cloudflare DNS provider with A/AAAA support
-  - File & Memory state stores with atomic writes
-  - Idempotency via state tracking
-  - Retry logic with exponential backoff
-  - Environment variable configuration
-  - Systemd integration with installer script
+**For complete documentation, see [docs/README.md](docs/README.md)**
