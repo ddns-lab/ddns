@@ -542,10 +542,14 @@ impl IpSource for NetlinkIpSource {
                                                 tracing::error!("Receiver dropped, stopping monitor");
                                                 break;
                                             }
+                                            // Only update last_public_v4 when we have a new public IP
+                                            // This preserves the previous IP when current IP is deleted
+                                            last_public_v4 = public_v4;
                                         } else if last_public_v4.is_some() {
                                             tracing::warn!("→ No public IPv4 available, DNS update skipped (was: {:?})", last_public_v4);
+                                            // Don't update last_public_v4 when public IP is deleted
+                                            // This preserves the previous IP for the next update
                                         }
-                                        last_public_v4 = public_v4;
                                     }
 
                                     if last_public_v6 != public_v6 {
@@ -556,10 +560,12 @@ impl IpSource for NetlinkIpSource {
                                                 tracing::error!("Receiver dropped, stopping monitor");
                                                 break;
                                             }
+                                            // Only update last_public_v6 when we have a new public IP
+                                            last_public_v6 = public_v6;
                                         } else if last_public_v6.is_some() {
                                             tracing::warn!("→ No public IPv6 available, DNS update skipped (was: {:?})", last_public_v6);
+                                            // Don't update last_public_v6 when public IP is deleted
                                         }
-                                        last_public_v6 = public_v6;
                                     }
 
                                     last_event = now;

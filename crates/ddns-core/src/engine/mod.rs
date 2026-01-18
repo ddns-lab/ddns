@@ -205,9 +205,11 @@ impl DdnsEngine {
             }
         }
 
-        // Get initial IP for logging
-        let current_ip = self.ip_source.current().await?;
-        info!("Initial IP: {}", current_ip);
+        // Get initial IP for logging (non-blocking - allows starting without IPs)
+        match self.ip_source.current().await {
+            Ok(ip) => info!("Initial IP: {}", ip),
+            Err(e) => info!("No initial IP available (will wait for netlink events): {}", e),
+        }
 
         // Watch for IP changes
         let mut ip_stream = self.ip_source.watch();
