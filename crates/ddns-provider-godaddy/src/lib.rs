@@ -621,9 +621,16 @@ impl ProviderConfigurable for GoDaddyConfigurable {
             .and_then(|v| v.as_str())
             .ok_or_else(|| Error::config("Missing api_secret in configuration"))?;
 
+        // Check if OTE (test) environment should be used
+        let ote = config
+            .get("ote")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
         Ok(Box::new(GoDaddyProvider::new(
             api_key,
             api_secret,
+            ote,
             dry_run,
         )))
     }
