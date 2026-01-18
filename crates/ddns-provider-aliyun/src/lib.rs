@@ -590,12 +590,18 @@ impl AliyunProvider {
         Ok(record_id.to_string())
     }
 
-    /// Get current record value
-    async fn get_current_record(&self, record_id: &str) -> Result<IpAddr> {
-        // For Aliyun, we need to query by record_id
+    /// Get current record value by querying via record_name
+    async fn get_current_record_by_name(&self, record_name: &str, record_type: &str) -> Result<IpAddr> {
+        // Parse record name to extract domain
+        let parts: Vec<&str> = record_name.split('.').collect();
+        let domain_name = parts[parts.len() - 2..].join(".");
+
         let url = self.build_api_url(
             "DescribeDomainRecords",
-            &[("RecordId", record_id)],
+            &[
+                ("DomainName", &domain_name),
+                ("Type", record_type),
+            ],
         );
 
         let response = self
@@ -622,7 +628,7 @@ impl AliyunProvider {
                 )),
                 404 => Err(Error::not_found(format!(
                     "DNS record not found: {}",
-                    record_id
+                    record_name
                 ))),
                 429 => Err(Error::provider(
                     "aliyun",
@@ -657,7 +663,7 @@ impl AliyunProvider {
         })?;
 
         let record = records.first().ok_or_else(|| {
-            Error::not_found(format!("DNS record not found: {}", record_id))
+            Error::not_found(format!("DNS record not found: {}", record_name))
         })?;
 
         let current_ip_str = record["Value"].as_str().ok_or_else(|| {
@@ -689,9 +695,14 @@ impl AliyunProvider {
             new_ip
         );
 
-        // Extract RR (host record) from full record name
-        // For "ddns-test.warzone.cn": RR = "ddns-test"
+        // Extract RR (host record) and DomainName from full record name
+        // For "ddns-test.warzone.cn": RR = "ddns-test", DomainName = "warzone.cn"
         let parts: Vec<&str> = record_name.split('.').collect();
+
+        // Extract main domain (last 2 parts)
+        let domain_name = parts[parts.len() - 2..].join(".");
+
+        // Extract RR (everything before the domain)
         let rr = if parts.len() > 2 {
             parts[..parts.len() - 2].join(".")
         } else {
@@ -702,6 +713,7 @@ impl AliyunProvider {
             "UpdateDomainRecord",
             &[
                 ("RecordId", record_id),
+                ("DomainName", &domain_name),  // DomainName is required for UpdateDomainRecord
                 ("RR", &rr),
                 ("Type", record_type),
                 ("Value", &new_ip.to_string()),
@@ -847,7 +859,7 @@ impl DnsProvider for AliyunProvider {
         }
 
         // Step 2: Get current record to check if IP matches
-        let current_ip = self.get_current_record(&record_id).await?;
+        let current_ip = self.get_current_record_by_name(record_name, record_type).await?;
 
         // Step 3: If IP matches, return Unchanged (idempotency)
         if current_ip == new_ip {
