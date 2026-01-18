@@ -160,7 +160,6 @@ impl NameSiloProvider {
             ("version", API_VERSION),
             ("type", "json"),
             ("key", &self.api_key),
-            ("action", action),
         ];
 
         // Add additional parameters
@@ -174,7 +173,8 @@ impl NameSiloProvider {
             .collect::<Vec<_>>()
             .join("&");
 
-        format!("{}?{}", NAMESILO_API_BASE, query_string)
+        // NameSilo API format: https://www.namesilo.com/api/{operation}?params
+        format!("{}/{}?{}", NAMESILO_API_BASE, action, query_string)
     }
 
     /// Extract domain from record name
