@@ -38,7 +38,7 @@ use std::os::fd::AsRawFd;
 use std::pin::Pin;
 
 #[cfg(target_os = "linux")]
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Default debounce window to ignore IP flapping
 #[cfg(target_os = "linux")]

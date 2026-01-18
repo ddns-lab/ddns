@@ -200,7 +200,8 @@ impl AliyunProvider {
         mac.update(params.as_bytes());
 
         // Encode result to Base64 (as required by Aliyun API)
-        base64::encode(mac.finalize().into_bytes())
+        use base64::prelude::*;
+        BASE64_STANDARD.encode(mac.finalize().into_bytes())
     }
 
     /// Build signed API URL with query parameters

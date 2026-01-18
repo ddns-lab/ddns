@@ -15,7 +15,7 @@ path = "cloudflare-validation.rs"
 ddns-core = { path = "../crates/ddns-core" }
 ddns-provider-cloudflare = { path = "../crates/ddns-provider-cloudflare", optional = true }
 ddns-ip-netlink = { path = "../crates/ddns-ip-netlink" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 async-trait = { workspace = true }
 tokio-stream = { workspace = true }
 serde_json = { workspace = true }

@@ -459,7 +459,7 @@ impl DnsProvider for GoDaddyProvider {
         let host = Self::extract_host(record_name)?;
 
         // Step 3: Get current record (if exists)
-        let (record_id, current_ip) =
+        let (_record_id, current_ip) =
             match self.get_record(&domain, record_type, &host).await? {
                 Some((id, ip)) => (id, ip),
                 None => {
