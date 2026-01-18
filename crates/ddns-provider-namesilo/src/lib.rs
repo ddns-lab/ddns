@@ -275,11 +275,11 @@ impl NameSiloProvider {
             }
         }
 
-        // Get records array
+        // Get records array (NameSilo uses 'resource_record' not 'records')
         let records = reply
-            .get("records")
+            .get("resource_record")
             .and_then(|r| r.as_array())
-            .ok_or_else(|| Error::provider("namesilo", "Missing or invalid 'records' in response"))?;
+            .ok_or_else(|| Error::provider("namesilo", "Missing or invalid 'resource_record' in response"))?;
 
         // Find matching record
         for record in records {
