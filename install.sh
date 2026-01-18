@@ -39,6 +39,12 @@ VERSION="${DDNS_VERSION:-${DEFAULT_VERSION}}"
 BINDIR="${DDNS_BINDIR:-${DEFAULT_BINDIR}}"
 CONFIGDIR="${DDNS_CONFIGDIR:-${DEFAULT_CONFIGDIR}}"
 NONINTERACTIVE="${DDNS_NONINTERACTIVE:-false}"
+
+# Auto-detect non-interactive mode when running in pipe or without terminal
+# This prevents interactive prompts in curl | sh scenarios
+if ! tty -s 2>/dev/null; then
+    NONINTERACTIVE="true"
+fi
 ARCH="$(uname -m)"
 OS="$(uname -s)"
 

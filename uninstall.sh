@@ -38,6 +38,12 @@ CONFIGDIR="${DDNS_CONFIGDIR:-${DEFAULT_CONFIGDIR}}"
 PURGE_ALL="${DDNS_PURGE_ALL:-false}"
 NONINTERACTIVE="${DDNS_NONINTERACTIVE:-false}"
 
+# Auto-detect non-interactive mode when running in pipe or without terminal
+# This prevents interactive prompts in curl | sh scenarios
+if ! tty -s 2>/dev/null; then
+    NONINTERACTIVE="true"
+fi
+
 # Logging functions
 log_info() {
     printf '%b' "${BLUE}[INFO]${NC} $1\n" >&2
