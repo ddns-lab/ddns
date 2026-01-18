@@ -70,10 +70,12 @@ jobs:
         run: cargo build --tests -p ddns-ip-netlink --verbose
 
       - name: Run integration tests with sudo
-        run: sudo cargo test -p ddns-ip-netlink --test integration_test -- --ignored
+        run: |
+          sudo -E env "PATH=$PATH" cargo test -p ddns-ip-netlink --test integration_test -- --ignored
 
       - name: Run all netlink tests
-        run: sudo cargo test -p ddns-ip-netlink --verbose
+        run: |
+          sudo -E env "PATH=$PATH" cargo test -p ddns-ip-netlink --verbose
 
   # Docker Integration Tests
   docker-integration-tests:
