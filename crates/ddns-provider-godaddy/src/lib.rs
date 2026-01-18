@@ -742,13 +742,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "API key cannot be empty")]
     fn test_empty_api_key_panics() {
-        GoDaddyProvider::new("", "secret", false);
+        GoDaddyProvider::new("", "secret", false, false);
     }
 
     #[test]
     #[should_panic(expected = "API secret cannot be empty")]
     fn test_empty_api_secret_panics() {
-        GoDaddyProvider::new("key", "", false);
+        GoDaddyProvider::new("key", "", false, false);
     }
 
     #[test]
@@ -767,11 +767,11 @@ mod tests {
 
     #[test]
     fn test_build_auth_header() {
-        let provider = GoDaddyProvider::new("my_key", "my_secret", false);
+        let provider = GoDaddyProvider::new("my_key", "my_secret", false, false);
         let header = provider.build_auth_header();
-        assert!(header.starts_with("Basic "));
-        // Basic auth should be base64 of "key:secret"
-        assert!(!header.contains("my_key"));
-        assert!(!header.contains("my_secret"));
+        // GoDaddy uses sso-key format
+        assert!(header.starts_with("sso-key "));
+        assert!(header.contains("my_key"));
+        assert!(header.contains("my_secret"));
     }
 }

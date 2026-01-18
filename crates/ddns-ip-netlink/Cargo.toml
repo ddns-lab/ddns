@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Netlink-based IP source for the DDNS system (Linux)"
 
 [dependencies]
-ddns-core = { path = "../ddns-core", version = "0.1" }
+ddns-core = { path = "../ddns-core", version = "0.2" }
 
 # Common dependencies
 tokio = { workspace = true }

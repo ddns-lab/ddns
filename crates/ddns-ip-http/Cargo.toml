@@ -8,7 +8,7 @@ repository.workspace = true
 description = "HTTP-based IP source for the DDNS system (fallback/CI)"
 
 [dependencies]
-ddns-core = { path = "../ddns-core", version = "0.1" }
+ddns-core = { path = "../ddns-core", version = "0.2" }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 async-trait = { workspace = true }

@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Cloudflare DNS provider for the DDNS system"
 
 [dependencies]
-ddns-core = { path = "../ddns-core", version = "0.1" }
+ddns-core = { path = "../ddns-core", version = "0.2" }
 
 tokio = { workspace = true }
 async-trait = { workspace = true }
