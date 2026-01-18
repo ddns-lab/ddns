@@ -564,23 +564,35 @@ impl ProviderConfigurable for GoDaddyConfigurable {
     }
 
     fn load_from_env(&self) -> Result<Value> {
-        let api_key = std::env::var("GODADDY_API_KEY")
-            .map_err(|_| Error::config("GODADDY_API_KEY is required"))?;
+        // Helper function to check both new and old env var names
+        let get_env = |new_name: &str, old_name: &str| -> Result<String> {
+            std::env::var(new_name)
+                .or_else(|_| std::env::var(old_name))
+                .map_err(|_| Error::config(format!("{} is required (or {} for backwards compatibility)", new_name, old_name)))
+        };
 
-        let api_secret = std::env::var("GODADDY_API_SECRET")
-            .map_err(|_| Error::config("GODADDY_API_SECRET is required"))?;
+        let api_key = get_env("DDNS_GODADDY_API_KEY", "GODADDY_API_KEY")?;
+        let api_secret = get_env("DDNS_GODADDY_API_SECRET", "GODADDY_API_SECRET")?;
 
         if api_key.is_empty() {
-            return Err(Error::config("GODADDY_API_KEY cannot be empty"));
+            return Err(Error::config("DDNS_GODADDY_API_KEY cannot be empty"));
         }
 
         if api_secret.is_empty() {
-            return Err(Error::config("GODADDY_API_SECRET cannot be empty"));
+            return Err(Error::config("DDNS_GODADDY_API_SECRET cannot be empty"));
         }
+
+        // Check OTE environment flag (optional, defaults to false)
+        let ote = std::env::var("DDNS_GODADDY_OTE")
+            .or_else(|_| std::env::var("GODADDY_OTE"))
+            .unwrap_or_default()
+            .to_lowercase()
+            == "true";
 
         Ok(serde_json::json!({
             "api_key": api_key,
             "api_secret": api_secret,
+            "ote": ote,
         }))
     }
 
@@ -596,11 +608,11 @@ impl ProviderConfigurable for GoDaddyConfigurable {
             .ok_or_else(|| Error::config("Missing api_secret in configuration"))?;
 
         if api_key.is_empty() {
-            return Err(Error::config("GODADDY_API_KEY cannot be empty"));
+            return Err(Error::config("DDNS_GODADDY_API_KEY cannot be empty"));
         }
 
         if api_secret.is_empty() {
-            return Err(Error::config("GODADDY_API_SECRET cannot be empty"));
+            return Err(Error::config("DDNS_GODADDY_API_SECRET cannot be empty"));
         }
 
         Ok(())

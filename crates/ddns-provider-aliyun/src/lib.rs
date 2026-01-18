@@ -941,22 +941,26 @@ impl ProviderConfigurable for AliyunConfigurable {
 
     /// Load configuration from environment variables
     ///
-    /// Reads:
-    /// - `ALIYUN_ACCESS_KEY_ID` (required)
-    /// - `ALIYUN_ACCESS_KEY_SECRET` (required)
+    /// Reads (with backwards compatibility):
+    /// - `DDNS_ALIYUN_ACCESS_KEY_ID` or `ALIYUN_ACCESS_KEY_ID` (required)
+    /// - `DDNS_ALIYUN_ACCESS_KEY_SECRET` or `ALIYUN_ACCESS_KEY_SECRET` (required)
     fn load_from_env(&self) -> Result<Value> {
-        let access_key_id = std::env::var("ALIYUN_ACCESS_KEY_ID")
-            .map_err(|_| Error::config("ALIYUN_ACCESS_KEY_ID is required"))?;
+        // Helper function to check both new and old env var names
+        let get_env = |new_name: &str, old_name: &str| -> Result<String> {
+            std::env::var(new_name)
+                .or_else(|_| std::env::var(old_name))
+                .map_err(|_| Error::config(format!("{} is required (or {} for backwards compatibility)", new_name, old_name)))
+        };
 
-        let access_key_secret = std::env::var("ALIYUN_ACCESS_KEY_SECRET")
-            .map_err(|_| Error::config("ALIYUN_ACCESS_KEY_SECRET is required"))?;
+        let access_key_id = get_env("DDNS_ALIYUN_ACCESS_KEY_ID", "ALIYUN_ACCESS_KEY_ID")?;
+        let access_key_secret = get_env("DDNS_ALIYUN_ACCESS_KEY_SECRET", "ALIYUN_ACCESS_KEY_SECRET")?;
 
         if access_key_id.is_empty() {
-            return Err(Error::config("ALIYUN_ACCESS_KEY_ID cannot be empty"));
+            return Err(Error::config("DDNS_ALIYUN_ACCESS_KEY_ID cannot be empty"));
         }
 
         if access_key_secret.is_empty() {
-            return Err(Error::config("ALIYUN_ACCESS_KEY_SECRET cannot be empty"));
+            return Err(Error::config("DDNS_ALIYUN_ACCESS_KEY_SECRET cannot be empty"));
         }
 
         Ok(serde_json::json!({
@@ -980,7 +984,7 @@ impl ProviderConfigurable for AliyunConfigurable {
             .ok_or_else(|| Error::config("Missing access_key_secret in configuration"))?;
 
         if access_key_id.is_empty() {
-            return Err(Error::config("ALIYUN_ACCESS_KEY_ID cannot be empty"));
+            return Err(Error::config("DDNS_ALIYUN_ACCESS_KEY_ID cannot be empty"));
         }
 
         if access_key_secret.is_empty() {

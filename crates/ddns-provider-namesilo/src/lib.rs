@@ -714,11 +714,17 @@ impl ProviderConfigurable for NameSiloConfigurable {
     }
 
     fn load_from_env(&self) -> Result<Value> {
-        let api_key = std::env::var("NAMESILO_API_KEY")
-            .map_err(|_| Error::config("NAMESILO_API_KEY is required"))?;
+        // Helper function to check both new and old env var names
+        let get_env = |new_name: &str, old_name: &str| -> Result<String> {
+            std::env::var(new_name)
+                .or_else(|_| std::env::var(old_name))
+                .map_err(|_| Error::config(format!("{} is required (or {} for backwards compatibility)", new_name, old_name)))
+        };
+
+        let api_key = get_env("DDNS_NAMESILO_API_KEY", "NAMESILO_API_KEY")?;
 
         if api_key.is_empty() {
-            return Err(Error::config("NAMESILO_API_KEY cannot be empty"));
+            return Err(Error::config("DDNS_NAMESILO_API_KEY cannot be empty"));
         }
 
         Ok(serde_json::json!({
@@ -733,7 +739,7 @@ impl ProviderConfigurable for NameSiloConfigurable {
             .ok_or_else(|| Error::config("Missing api_key in configuration"))?;
 
         if api_key.is_empty() {
-            return Err(Error::config("NAMESILO_API_KEY cannot be empty"));
+            return Err(Error::config("DDNS_NAMESILO_API_KEY cannot be empty"));
         }
 
         Ok(())

@@ -46,9 +46,13 @@ jobs:
         run: cargo test -p ddns-core --test event_driven_update_contract --verbose
 
   # Netlink Integration Tests - Linux only
+  # NOTE: These tests are disabled in CI because they require creating veth network interfaces
+  # which is not supported in GitHub Actions containers. Run these tests manually on a Linux server:
+  # sudo cargo test -p ddns-ip-netlink --test integration_test -- --ignored
   netlink-integration-tests:
-    name: Netlink Integration Tests
+    name: Netlink Integration Tests (Skipped in CI)
     runs-on: ubuntu-latest
+    if: false  # Disabled in CI - requires veth interface support
 
     steps:
       - name: Checkout code
