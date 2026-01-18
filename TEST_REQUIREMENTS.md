@@ -198,6 +198,63 @@ test_newprovider() {
 - ⚠️ 测试脚本20秒超时不足以等待DNS传播
 - ✅ 手动验证: dig显示DNS记录正确 (8.8.8.8)
 
+### NameSilo
+- **状态**: ✅ 核心功能已验证 (API调用成功，DNS传播中)
+- **测试日期**: 2026-01-18
+- **测试服务器**: JP测试服务器 (见.test.info)
+- **测试版本**: v0.1.0
+- **测试域名**: ddns-integration-test.atlanssia.com
+
+**已验证功能**:
+- ✅ Netlink监控启动成功
+- ✅ IP查询工作正常
+- ✅ DNS记录创建API调用成功
+- ✅ API URL格式正确 (/api/{operation}?params)
+- ✅ 响应字段解析正确 (resource_record)
+
+**测试日志证据**:
+```
+[INFO] DNS record does not exist, creating: ddns-integration-test.atlanssia.com
+[INFO] Created namesilo DNS record: ddns-integration-test.atlanssia.com -> 1.1.1.1 (ID: f444c2fd94216f227960b08ba5ff69a2)
+[INFO] Created record ddns-integration-test.atlanssia.com -> 1.1.1.1
+[INFO] [Engine Event] UpdateSucceeded { record_name: "ddns-integration-test.atlanssia.com", new_ip: 1.1.1.1 }
+```
+
+**API验证**:
+```bash
+curl "https://www.namesilo.com/api/dnsListRecords?version=1&type=json&key=xxx&domain=atlanssia.com"
+# 返回: record_id=f444c2fd94216f227960b08ba5ff69a2, value=1.1.1.1
+```
+
+**Bug修复**:
+1. API URL格式: `/api?action=xxx` → `/api/xxx`
+2. 响应字段: `records` → `resource_record`
+
+**当前限制**:
+- ⚠️ DNS传播延迟待验证（API调用成功但dig未返回记录）
+
+### GoDaddy
+- **状态**: ⚠️ 凭证验证失败 (需要有效凭证)
+- **测试日期**: 2026-01-18
+- **测试服务器**: JP测试服务器 (见.test.info)
+- **测试版本**: v0.1.0
+- **测试域名**: ddns-integration-test.g6pdd.net
+
+**问题分析**:
+- ❌ OTE凭证: 401 Unauthorized
+- ❌ Production凭证: 401 Unauthorized (curl直接测试也失败)
+- ⚠️ 错误信息: "MISSING_CREDENTIALS"
+- ✅ Provider实现: Basic Auth格式正确
+
+**需要**:
+- 有效的GoDaddy API Key和Secret
+- 确认域名g6pdd.net与账户关联
+- 或使用GoDaddy OTE测试环境
+
+### Namecheap
+- **状态**: ❌ 未测试 (无凭证)
+- **注意**: 需要有效的Namecheap账户或sandbox环境
+
 ## 核心功能验证
 
 即使在网络受限的环境中，以下核心功能也已通过验证：
