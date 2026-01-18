@@ -107,8 +107,6 @@ sudo systemctl status ddnsd
 
 ### Environment Variables
 
-All provider credentials use `DDNS_` prefix:
-
 **Cloudflare**:
 ```bash
 DDNS_CLOUDFLARE_API_TOKEN=your_token
@@ -132,8 +130,6 @@ DDNS_GODADDY_API_KEY=your_key
 DDNS_GODADDY_API_SECRET=your_secret
 DDNS_GODADDY_OTE=true  # optional: use test environment
 ```
-
-> **Note**: Old environment variable names without `DDNS_` prefix are still supported for backwards compatibility.
 
 ---
 

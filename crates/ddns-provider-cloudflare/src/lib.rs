@@ -881,30 +881,20 @@ impl ProviderConfigurable for CloudflareConfigurable {
 
     /// Load configuration from environment variables
     ///
-    /// Reads (with backwards compatibility):
-    /// - `DDNS_CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_API_TOKEN` (required)
-    /// - `DDNS_CLOUDFLARE_ZONE_ID` or `CLOUDFLARE_ZONE_ID` (optional)
-    /// - `DDNS_CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_ACCOUNT_ID` (optional)
+    /// Reads:
+    /// - `DDNS_CLOUDFLARE_API_TOKEN` (required)
+    /// - `DDNS_CLOUDFLARE_ZONE_ID` (optional)
+    /// - `DDNS_CLOUDFLARE_ACCOUNT_ID` (optional)
     fn load_from_env(&self) -> Result<Value> {
-        // Helper function to check both new and old env var names
-        let get_env = |new_name: &str, old_name: &str| -> Result<String> {
-            std::env::var(new_name)
-                .or_else(|_| std::env::var(old_name))
-                .map_err(|_| Error::config(format!("{} is required (or {} for backwards compatibility)", new_name, old_name)))
-        };
-
-        let api_token = get_env("DDNS_CLOUDFLARE_API_TOKEN", "CLOUDFLARE_API_TOKEN")?;
+        let api_token = std::env::var("DDNS_CLOUDFLARE_API_TOKEN")
+            .map_err(|_| Error::config("DDNS_CLOUDFLARE_API_TOKEN is required"))?;
 
         if api_token.is_empty() {
             return Err(Error::config("DDNS_CLOUDFLARE_API_TOKEN cannot be empty"));
         }
 
-        let zone_id = std::env::var("DDNS_CLOUDFLARE_ZONE_ID")
-            .or_else(|_| std::env::var("CLOUDFLARE_ZONE_ID"))
-            .ok();
-        let account_id = std::env::var("DDNS_CLOUDFLARE_ACCOUNT_ID")
-            .or_else(|_| std::env::var("CLOUDFLARE_ACCOUNT_ID"))
-            .ok();
+        let zone_id = std::env::var("DDNS_CLOUDFLARE_ZONE_ID").ok();
+        let account_id = std::env::var("DDNS_CLOUDFLARE_ACCOUNT_ID").ok();
 
         Ok(serde_json::json!({
             "api_token": api_token,
