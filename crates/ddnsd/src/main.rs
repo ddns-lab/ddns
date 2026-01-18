@@ -139,13 +139,23 @@ fn print_help() {
     println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
     println!();
     println!("  DNS Provider Configuration:");
-    println!("    DDNS_PROVIDER_TYPE             Provider type (cloudflare, aliyun, namesilo, godaddy) [default: cloudflare]");
-    println!("    DDNS_PROVIDER_API_TOKEN        API token [required for Cloudflare]");
-    println!("    DDNS_PROVIDER_ZONE_ID          Zone ID (optional, for Cloudflare)");
-    println!("    DDNS_PROVIDER_ACCESS_KEY_ID    AccessKey ID [required for Aliyun]");
-    println!("    DDNS_PROVIDER_ACCESS_KEY_SECRET AccessKey Secret [required for Aliyun]");
-    println!("    DDNS_PROVIDER_API_KEY          API key [required for NameSilo/GoDaddy]");
-    println!("    DDNS_PROVIDER_API_SECRET       API secret [required for GoDaddy]");
+    println!("    DDNS_PROVIDER_TYPE         Provider type (cloudflare, aliyun, namesilo, godaddy) [default: cloudflare]");
+    println!();
+    println!("    Cloudflare:");
+    println!("      DDNS_CLOUDFLARE_API_TOKEN   API token [required]");
+    println!("      DDNS_CLOUDFLARE_ZONE_ID     Zone ID [optional]");
+    println!();
+    println!("    Aliyun:");
+    println!("      DDNS_ALIYUN_ACCESS_KEY_ID     AccessKey ID [required]");
+    println!("      DDNS_ALIYUN_ACCESS_KEY_SECRET AccessKey Secret [required]");
+    println!();
+    println!("    NameSilo:");
+    println!("      DDNS_NAMESILO_API_KEY      API key [required]");
+    println!();
+    println!("    GoDaddy:");
+    println!("      DDNS_GODADDY_API_KEY       API key [required]");
+    println!("      DDNS_GODADDY_API_SECRET    API secret [required]");
+    println!("      DDNS_GODADDY_OTE           Use test environment [default: false]");
     println!();
     println!("  Records:");
     println!("    DDNS_RECORDS             Comma-separated records with optional types");
@@ -207,7 +217,8 @@ impl Config {
             ip_source_version: env::var("DDNS_IP_SOURCE_VERSION").ok(),
             provider_type: env::var("DDNS_PROVIDER_TYPE")
                 .unwrap_or_else(|_| "cloudflare".to_string()),
-            provider_api_token: env::var("DDNS_PROVIDER_API_TOKEN")?,
+            provider_api_token: env::var("DDNS_PROVIDER_API_TOKEN")
+                .unwrap_or_default(),
             provider_zone_id: env::var("DDNS_PROVIDER_ZONE_ID").ok(),
             records: env::var("DDNS_RECORDS")
                 .unwrap_or_default()
@@ -242,40 +253,11 @@ impl Config {
     /// - Numeric range validation
     /// - Type enumeration validation
     /// - Security checks (secret exposure, URL schemes)
+    ///
+    /// Note: Provider-specific credentials (DDNS_CLOUDFLARE_API_TOKEN,
+    /// DDNS_ALIYUN_ACCESS_KEY_ID, etc.) are validated by each provider's
+    /// Configurable implementation, not here.
     fn validate(&self) -> Result<()> {
-        // Validate API token presence and format
-        if self.provider_api_token.is_empty() {
-            anyhow::bail!(
-                "DDNS_PROVIDER_API_TOKEN is required. \
-                Set it via: export DDNS_PROVIDER_API_TOKEN=your_token"
-            );
-        }
-
-        // Provider-specific tokens are validated by each provider's Configurable implementation
-        // This field is kept for backward compatibility but is not strictly validated here
-        // Different providers use different env vars (e.g., ALIYUN_ACCESS_KEY_ID, CLOUDFLARE_API_TOKEN)
-        // Only check for obvious placeholder tokens
-        if self.provider_api_token.len() < 3 {
-            anyhow::bail!(
-                "DDNS_PROVIDER_API_TOKEN appears too short ({} chars). \
-                Verify your credentials are correct.",
-                self.provider_api_token.len()
-            );
-        }
-
-        // Check for obvious placeholder tokens (common mistake)
-        let token_lower = self.provider_api_token.to_lowercase();
-        if token_lower.contains("your_token")
-            || token_lower.contains("replace_me")
-            || token_lower.contains("example")
-            || token_lower == "token"
-        {
-            anyhow::bail!(
-                "DDNS_PROVIDER_API_TOKEN appears to be a placeholder. \
-                Use an actual API token from your DNS provider."
-            );
-        }
-
         // Validate provider type
         match self.provider_type.as_str() {
             "cloudflare" | "aliyun" | "namesilo" | "godaddy" => {} // Currently supported
