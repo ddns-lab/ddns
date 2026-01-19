@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.2.2] - 2026-01-19
+
+### Fixed
+
+- **systemctl stop timeout**: Fixed 90-second timeout when stopping service via `systemctl stop ddnsd`
+  - Engine now properly handles SIGTERM signals from systemd
+  - Added separate handlers for SIGTERM (systemd) and SIGINT (Ctrl-C)
+  - Shutdown now completes in ~25ms instead of timing out after 90 seconds
+  - Improved state flushing during graceful shutdown
+
+### Changed
+
+- **Environment variable naming**: Provider-specific credentials now use DDNS_ prefix
+  - `DDNS_PROVIDER_API_TOKEN` → `DDNS_CLOUDFLARE_API_TOKEN` (Cloudflare)
+  - `DDNS_PROVIDER_API_TOKEN` → `DDNS_ALIYUN_ACCESS_KEY_ID` + `DDNS_ALIYUN_ACCESS_KEY_SECRET` (Aliyun)
+  - `DDNS_PROVIDER_API_KEY` → `DDNS_NAMESILO_API_KEY` (NameSilo)
+  - `DDNS_PROVIDER_API_KEY` → `DDNS_GODADDY_API_KEY` + `DDNS_GODADDY_API_SECRET` (GoDaddy)
+- **Install/Uninstall scripts**: Auto-detect non-interactive mode when running via pipe (curl | sh)
+- **Configuration template**: Updated install.sh to generate correct provider-specific environment variables
+
+### Docs
+
+- **Migration guide**: Added comprehensive v0.2.0 → v0.2.1 migration instructions with breaking changes
+- **Installation guide**: Documented non-interactive mode behavior for pipe installations
+- **Updated upgrade paths**: Documented environment variable migration steps
+
+### Technical Details
+
+- Modified `crates/ddns-core/src/engine/mod.rs` to use `tokio::signal::unix::signal()` for SIGTERM/SIGINT
+- Updated `install.sh` config template with provider-specific variable names
+- Added `! tty -s` detection in install/uninstall scripts for non-interactive mode
+
+---
+
 ## [v0.1.2] - 2025-01-15
 
 ### Added
@@ -128,7 +162,7 @@ This project follows [Semantic Versioning](versioning.md):
 - **MINOR**: Backward-compatible functionality additions
 - **PATCH**: Backward-compatible bug fixes
 
-**Current stable version**: v0.1.2
+**Current stable version**: v0.2.2
 
 **Minimum supported version**: v0.1.0
 
