@@ -717,7 +717,7 @@ mod tests {
 
     #[test]
     fn test_provider_name() {
-        let provider = GoDaddyProvider::new("test_key", "test_secret", false);
+        let provider = GoDaddyProvider::new("test_key", "test_secret", false, false);
         assert_eq!(provider.provider_name(), "godaddy");
     }
 
@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_api_key_not_exposed_in_debug() {
-        let provider = GoDaddyProvider::new("secret_key", "secret_secret", false);
+        let provider = GoDaddyProvider::new("secret_key", "secret_secret", false, false);
         let debug_str = format!("{:?}", provider);
         assert!(!debug_str.contains("secret_key"));
         assert!(!debug_str.contains("secret_secret"));
@@ -740,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_supports_record() {
-        let provider = GoDaddyProvider::new("key", "secret", false);
+        let provider = GoDaddyProvider::new("key", "secret", false, false);
         assert!(provider.supports_record("example.com"));
         assert!(provider.supports_record("www.example.com"));
         assert!(!provider.supports_record(""));

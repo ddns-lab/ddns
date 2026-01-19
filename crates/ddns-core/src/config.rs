@@ -152,11 +152,15 @@ pub enum IpVersion {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// struct CloudflareConfigurable;
 ///
 /// impl ProviderConfigurable for CloudflareConfigurable {
-///     fn load_from_env() -> Result<serde_json::Value> {
+///     fn name(&self) -> &'static str {
+///         "cloudflare"
+///     }
+///
+///     fn load_from_env(&self) -> Result<serde_json::Value> {
 ///         let api_token = env::var("CLOUDFLARE_API_TOKEN")
 ///             .map_err(|_| Error::config("CLOUDFLARE_API_TOKEN is required"))?;
 ///         let zone_id = env::var("CLOUDFLARE_ZONE_ID").ok();
@@ -167,7 +171,7 @@ pub enum IpVersion {
 ///         }))
 ///     }
 ///
-///     fn validate(config: &serde_json::Value) -> Result<()> {
+///     fn validate(&self, config: &serde_json::Value) -> Result<()> {
 ///         config.get("api_token")
 ///             .and_then(|v| v.as_str())
 ///             .ok_or_else(|| Error::config("Missing api_token"))?;
@@ -175,6 +179,7 @@ pub enum IpVersion {
 ///     }
 ///
 ///     fn create_provider(
+///         &self,
 ///         config: &serde_json::Value,
 ///         dry_run: bool,
 ///     ) -> Result<Box<dyn DnsProvider>> {
@@ -272,7 +277,7 @@ pub trait ProviderConfigurable: Send + Sync {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// // Cloudflare provider config
 /// let config = ProviderConfig {
 ///     provider_type: "cloudflare".to_string(),

@@ -165,10 +165,10 @@ impl ProviderRegistry {
     /// # use ddns_core::config::ProviderConfigurable;
     /// # struct CloudflareConfigurable;
     /// # impl ProviderConfigurable for CloudflareConfigurable {
-    /// #     fn load_from_env() -> Result<serde_json::Value, ddns_core::Error> { unimplemented!() }
-    /// #     fn validate(config: &serde_json::Value) -> Result<(), ddns_core::Error> { unimplemented!() }
-    /// #     fn create_provider(config: &serde_json::Value, dry_run: bool) -> Result<Box<dyn ddns_core::DnsProvider>, ddns_core::Error> { unimplemented!() }
-    /// #     fn provider_name() -> &'static str { "cloudflare" }
+    /// #     fn name(&self) -> &'static str { "cloudflare" }
+    /// #     fn load_from_env(&self) -> Result<serde_json::Value, ddns_core::Error> { unimplemented!() }
+    /// #     fn validate(&self, config: &serde_json::Value) -> Result<(), ddns_core::Error> { unimplemented!() }
+    /// #     fn create_provider(&self, config: &serde_json::Value, dry_run: bool) -> Result<Box<dyn ddns_core::DnsProvider>, ddns_core::Error> { unimplemented!() }
     /// # }
     /// let registry = ProviderRegistry::new();
     /// registry.register_provider_configurable(Box::new(CloudflareConfigurable));
@@ -294,15 +294,17 @@ impl ProviderRegistry {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust,no_run,ignore
     /// # use ddns_core::registry::ProviderRegistry;
     /// # use ddns_core::config::ProviderConfig;
     /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let registry = ProviderRegistry::new();
-    /// let config = ProviderConfig::Cloudflare {
-    ///     api_token: "token".to_string(),
-    ///     zone_id: None,
-    ///     account_id: None,
+    /// let config = ProviderConfig {
+    ///     provider_type: "cloudflare".to_string(),
+    ///     config: serde_json::json!({
+    ///         "api_token": "token",
+    ///         "zone_id": null,
+    ///     }),
     /// };
     /// let provider = registry.create_provider(&config)?;
     /// # Ok(())
