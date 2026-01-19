@@ -238,6 +238,12 @@ impl DdnsEngine {
             }
         } else {
             // Production mode: wait for SIGINT/SIGTERM
+            #[cfg(unix)]
+            let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .map_err(|e| anyhow::anyhow!("Failed to setup SIGTERM handler: {}", e))?;
+            let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                .map_err(|e| anyhow::anyhow!("Failed to setup SIGINT handler: {}", e))?;
+
             loop {
                 tokio::select! {
                     // Handle IP changes
@@ -248,7 +254,38 @@ impl DdnsEngine {
                         }
                     }
 
-                    // Handle shutdown signal (production)
+                    // Handle SIGTERM (systemd stop)
+                    _ = sigterm.recv() => {
+                        info!("SIGTERM received, shutting down gracefully");
+                        self.emit_event(EngineEvent::Stopped {
+                            reason: "SIGTERM".to_string(),
+                        });
+                        break;
+                    }
+
+                    // Handle SIGINT (Ctrl-C)
+                    _ = sigint.recv() => {
+                        info!("SIGINT received, shutting down gracefully");
+                        self.emit_event(EngineEvent::Stopped {
+                            reason: "SIGINT".to_string(),
+                        });
+                        break;
+                    }
+                }
+            }
+
+            #[cfg(not(unix))]
+            loop {
+                tokio::select! {
+                    // Handle IP changes
+                    Some(event) = ip_stream.next() => {
+                        if let Err(e) = self.handle_ip_change(event).await {
+                            error!("Failed to handle IP change: {}", e);
+                            // Continue running despite errors
+                        }
+                    }
+
+                    // Handle shutdown signal (non-Unix)
                     _ = tokio::signal::ctrl_c() => {
                         info!("Shutdown signal received");
                         self.emit_event(EngineEvent::Stopped {
