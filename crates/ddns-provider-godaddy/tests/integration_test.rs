@@ -4,7 +4,7 @@
 
 use ddns_core::traits::DnsProvider;
 use ddns_provider_godaddy::GoDaddyProvider;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 
 /// Test dry-run mode
 #[test]

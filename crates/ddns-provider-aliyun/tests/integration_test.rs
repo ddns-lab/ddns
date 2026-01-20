@@ -5,7 +5,7 @@
 
 use ddns_core::traits::DnsProvider;
 use ddns_provider_aliyun::AliyunProvider;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 
 /// Test dry-run mode
 #[test]
