@@ -10,6 +10,7 @@ path = "embedded_usage.rs"
 [[bin]]
 name = "cloudflare_validation"
 path = "cloudflare-validation.rs"
+required-features = ["cloudflare"]
 
 [dependencies]
 ddns-core = { path = "../crates/ddns-core" }

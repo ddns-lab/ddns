@@ -422,7 +422,7 @@ impl AliyunProvider {
         // Find the record that matches our record_name (by RR field)
         let record = records
             .iter()
-            .find(|r| r["RR"].as_str().map_or(false, |rr| rr == expected_rr))
+            .find(|r| r["RR"].as_str().is_some_and(|rr| rr == expected_rr))
             .ok_or_else(|| {
                 Error::not_found(format!(
                     "DNS record not found: {} (type: {}, looking for RR={})",

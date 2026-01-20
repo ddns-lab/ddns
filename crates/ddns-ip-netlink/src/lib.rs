@@ -456,10 +456,10 @@ impl IpSource for NetlinkIpSource {
 
                     // Log all netlink messages for debugging
                     let msg_type_name = match msg_type {
-                        x if x == libc::RTM_NEWADDR as u16 => "RTM_NEWADDR",
-                        x if x == libc::RTM_DELADDR as u16 => "RTM_DELADDR",
-                        x if x == libc::RTM_NEWLINK as u16 => "RTM_NEWLINK",
-                        x if x == libc::RTM_DELLINK as u16 => "RTM_DELLINK",
+                        x if x == libc::RTM_NEWADDR => "RTM_NEWADDR",
+                        x if x == libc::RTM_DELADDR => "RTM_DELADDR",
+                        x if x == libc::RTM_NEWLINK => "RTM_NEWLINK",
+                        x if x == libc::RTM_DELLINK => "RTM_DELLINK",
                         _ => "UNKNOWN",
                     };
                     tracing::debug!(
@@ -471,7 +471,7 @@ impl IpSource for NetlinkIpSource {
                     );
 
                     // Check if this is an address event
-                    if msg_type == libc::RTM_NEWADDR as u16 || msg_type == libc::RTM_DELADDR as u16
+                    if msg_type == libc::RTM_NEWADDR || msg_type == libc::RTM_DELADDR
                     {
                         let now = std::time::Instant::now();
 
@@ -479,7 +479,7 @@ impl IpSource for NetlinkIpSource {
                         if now.duration_since(last_event) > debounce_duration {
                             tracing::info!(
                                 "--- Address event detected ({}), querying IPs ---",
-                                if msg_type == libc::RTM_NEWADDR as u16 {
+                                if msg_type == libc::RTM_NEWADDR {
                                     "NEWADDR"
                                 } else {
                                     "DELADDR"
@@ -528,7 +528,7 @@ impl IpSource for NetlinkIpSource {
                                     // Log all IP changes for monitoring (both private and public)
                                     if last_any_v4 != any_v4 {
                                         let is_public = any_v4
-                                            .map_or(false, |ip| temp_source.is_public_ip(&ip));
+                                            .is_some_and(|ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv4 any changed: {:?} -> {:?} [{}]",
                                             last_any_v4,
@@ -540,7 +540,7 @@ impl IpSource for NetlinkIpSource {
 
                                     if last_any_v6 != any_v6 {
                                         let is_public = any_v6
-                                            .map_or(false, |ip| temp_source.is_public_ip(&ip));
+                                            .is_some_and(|ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv6 any changed: {:?} -> {:?} [{}]",
                                             last_any_v6,
