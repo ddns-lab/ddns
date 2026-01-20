@@ -1,7 +1,7 @@
 # DDNS
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ddns-lab/ddns/ci.yml?branch=main&label=CI)](https://github.com/ddns-lab/ddns/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/ddns-lab/ddns/main?token=THE_TOKEN)](https://codecov.io/gh/ddns-lab/ddns)
+[![Coverage](https://codecov.io/gh/ddns-lab/ddns/branch/main/graph/badge.svg)](https://codecov.io/gh/ddns-lab/ddns)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://www.rust-lang.org)
 [![GitHub Release](https://img.shields.io/github/v/release/ddns-lab/ddns)](https://github.com/ddns-lab/ddns/releases/latest)
