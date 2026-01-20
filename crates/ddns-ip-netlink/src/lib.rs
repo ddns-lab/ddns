@@ -471,8 +471,7 @@ impl IpSource for NetlinkIpSource {
                     );
 
                     // Check if this is an address event
-                    if msg_type == libc::RTM_NEWADDR || msg_type == libc::RTM_DELADDR
-                    {
+                    if msg_type == libc::RTM_NEWADDR || msg_type == libc::RTM_DELADDR {
                         let now = std::time::Instant::now();
 
                         // Apply debounce
@@ -527,8 +526,8 @@ impl IpSource for NetlinkIpSource {
 
                                     // Log all IP changes for monitoring (both private and public)
                                     if last_any_v4 != any_v4 {
-                                        let is_public = any_v4
-                                            .is_some_and(|ip| temp_source.is_public_ip(&ip));
+                                        let is_public =
+                                            any_v4.is_some_and(|ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv4 any changed: {:?} -> {:?} [{}]",
                                             last_any_v4,
@@ -539,8 +538,8 @@ impl IpSource for NetlinkIpSource {
                                     }
 
                                     if last_any_v6 != any_v6 {
-                                        let is_public = any_v6
-                                            .is_some_and(|ip| temp_source.is_public_ip(&ip));
+                                        let is_public =
+                                            any_v6.is_some_and(|ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv6 any changed: {:?} -> {:?} [{}]",
                                             last_any_v6,
