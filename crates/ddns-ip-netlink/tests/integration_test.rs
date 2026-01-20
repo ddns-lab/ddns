@@ -43,7 +43,7 @@ const TEST_INTERFACE_2: &str = "ddns-test1";
 /// veth interfaces behave more like real network interfaces and trigger netlink events properly
 fn create_veth_pair(name: &str, peer: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["link", "add", name, "type", "veth", "peer", "name", peer])
+        .args(["link", "add", name, "type", "veth", "peer", "name", peer])
         .status()?;
 
     if !status.success() {
@@ -52,7 +52,7 @@ fn create_veth_pair(name: &str, peer: &str) -> Result<(), Box<dyn std::error::Er
 
     // Bring both interfaces up
     let status = Command::new("ip")
-        .args(&["link", "set", name, "up"])
+        .args(["link", "set", name, "up"])
         .status()?;
 
     if !status.success() {
@@ -60,7 +60,7 @@ fn create_veth_pair(name: &str, peer: &str) -> Result<(), Box<dyn std::error::Er
     }
 
     let status = Command::new("ip")
-        .args(&["link", "set", peer, "up"])
+        .args(["link", "set", peer, "up"])
         .status()?;
 
     if !status.success() {
@@ -73,7 +73,7 @@ fn create_veth_pair(name: &str, peer: &str) -> Result<(), Box<dyn std::error::Er
 /// Helper to set IP address on an interface
 fn set_interface_ip(interface: &str, ip: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["addr", "add", ip, "dev", interface])
+        .args(["addr", "add", ip, "dev", interface])
         .status()?;
 
     if !status.success() {
@@ -83,10 +83,11 @@ fn set_interface_ip(interface: &str, ip: &str) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-/// Helper to delete IP address from an interface
+/// Helper to delete IP address from an interface (unused but kept for potential future use)
+#[allow(dead_code)]
 fn delete_interface_ip(interface: &str, ip: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["addr", "del", ip, "dev", interface])
+        .args(["addr", "del", ip, "dev", interface])
         .status()?;
 
     if !status.success() {
@@ -99,7 +100,7 @@ fn delete_interface_ip(interface: &str, ip: &str) -> Result<(), Box<dyn std::err
 /// Helper to flush all IPs from an interface
 fn flush_interface_ips(interface: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["addr", "flush", "dev", interface])
+        .args(["addr", "flush", "dev", interface])
         .status()?;
 
     if !status.success() {
@@ -112,7 +113,7 @@ fn flush_interface_ips(interface: &str) -> Result<(), Box<dyn std::error::Error>
 /// Helper to delete a network interface
 fn delete_interface(interface: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ip")
-        .args(&["link", "delete", interface])
+        .args(["link", "delete", interface])
         .status()?;
 
     if !status.success() {
@@ -379,7 +380,7 @@ async fn real_netlink_filters_loopback_addresses() {
     // The filtering happens in NetlinkIpSource implementation
 
     // Wait a bit to see if any events arrive
-    let event = tokio::time::timeout(Duration::from_millis(500), stream.next()).await;
+    let _event = tokio::time::timeout(Duration::from_millis(500), stream.next()).await;
 
     teardown();
 
