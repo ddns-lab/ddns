@@ -139,7 +139,9 @@ fn print_help() {
     println!("    DDNS_IP_SOURCE_VERSION   IP version (v4, v6, both) [default: both]");
     println!();
     println!("  DNS Provider Configuration:");
-    println!("    DDNS_PROVIDER_TYPE         Provider type (cloudflare, aliyun, namesilo, godaddy) [default: cloudflare]");
+    println!(
+        "    DDNS_PROVIDER_TYPE         Provider type (cloudflare, aliyun, namesilo, godaddy) [default: cloudflare]"
+    );
     println!();
     println!("    Cloudflare:");
     println!("      DDNS_CLOUDFLARE_API_TOKEN   API token [required]");
@@ -217,8 +219,7 @@ impl Config {
             ip_source_version: env::var("DDNS_IP_SOURCE_VERSION").ok(),
             provider_type: env::var("DDNS_PROVIDER_TYPE")
                 .unwrap_or_else(|_| "cloudflare".to_string()),
-            provider_api_token: env::var("DDNS_PROVIDER_API_TOKEN")
-                .unwrap_or_default(),
+            provider_api_token: env::var("DDNS_PROVIDER_API_TOKEN").unwrap_or_default(),
             provider_zone_id: env::var("DDNS_PROVIDER_ZONE_ID").ok(),
             records: env::var("DDNS_RECORDS")
                 .unwrap_or_default()
@@ -716,10 +717,7 @@ async fn run_daemon(config: Config) -> Result<()> {
     // configuration and calls the provider's ProviderConfigurable implementation
     // to create the provider instance. This ensures all providers follow the
     // same validation and creation pattern.
-    let dry_run = env::var("DDNS_MODE")
-        .unwrap_or_default()
-        .to_lowercase()
-        == "dry-run";
+    let dry_run = env::var("DDNS_MODE").unwrap_or_default().to_lowercase() == "dry-run";
 
     let provider = registry.create_provider_from_config(
         &ddns_config.provider.provider_type,

@@ -189,7 +189,10 @@ impl NameSiloProvider {
         if parts.len() < 2 {
             return Err(Error::provider(
                 "namesilo",
-                format!("Invalid record name '{}': must contain at least one dot", record_name),
+                format!(
+                    "Invalid record name '{}': must contain at least one dot",
+                    record_name
+                ),
             ));
         }
 
@@ -226,12 +229,7 @@ impl NameSiloProvider {
     }
 
     /// Get DNS record ID for a record name
-    async fn get_record_id(
-        &self,
-        domain: &str,
-        host: &str,
-        record_type: &str,
-    ) -> Result<String> {
+    async fn get_record_id(&self, domain: &str, host: &str, record_type: &str) -> Result<String> {
         let url = self.build_api_url("dnsListRecords", &[("domain", domain)]);
 
         let response = self
@@ -279,7 +277,12 @@ impl NameSiloProvider {
         let records = reply
             .get("resource_record")
             .and_then(|r| r.as_array())
-            .ok_or_else(|| Error::provider("namesilo", "Missing or invalid 'resource_record' in response"))?;
+            .ok_or_else(|| {
+                Error::provider(
+                    "namesilo",
+                    "Missing or invalid 'resource_record' in response",
+                )
+            })?;
 
         // Find matching record
         for record in records {
@@ -288,12 +291,12 @@ impl NameSiloProvider {
                 let r_type = r.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
                 if r_host == host && r_type == record_type {
-                    let record_id = r
-                        .get("record_id")
-                        .and_then(|id| id.as_str())
-                        .ok_or_else(|| {
-                            Error::provider("namesilo", "Missing 'record_id' in record")
-                        })?;
+                    let record_id =
+                        r.get("record_id")
+                            .and_then(|id| id.as_str())
+                            .ok_or_else(|| {
+                                Error::provider("namesilo", "Missing 'record_id' in record")
+                            })?;
                     return Ok(record_id.to_string());
                 }
             }
@@ -431,7 +434,12 @@ impl NameSiloProvider {
         let records = reply
             .get("resource_record")
             .and_then(|r| r.as_array())
-            .ok_or_else(|| Error::provider("namesilo", "Missing or invalid 'resource_record' in response"))?;
+            .ok_or_else(|| {
+                Error::provider(
+                    "namesilo",
+                    "Missing or invalid 'resource_record' in response",
+                )
+            })?;
 
         // Find matching record
         for record in records {
@@ -445,14 +453,12 @@ impl NameSiloProvider {
                         .and_then(|v| v.as_str())
                         .ok_or_else(|| Error::provider("namesilo", "Missing 'value' in record"))?;
 
-                    let ip: IpAddr = ip_str
-                        .parse()
-                        .map_err(|e| {
-                            Error::provider(
-                                "namesilo",
-                                format!("Invalid IP address '{}': {}", ip_str, e),
-                            )
-                        })?;
+                    let ip: IpAddr = ip_str.parse().map_err(|e| {
+                        Error::provider(
+                            "namesilo",
+                            format!("Invalid IP address '{}': {}", ip_str, e),
+                        )
+                    })?;
 
                     return Ok(ip);
                 }
@@ -551,11 +557,7 @@ impl NameSiloProvider {
     }
 
     /// Map HTTP error to appropriate Error type
-    fn map_http_error(
-        &self,
-        status: reqwest::StatusCode,
-        error_text: String,
-    ) -> Error {
+    fn map_http_error(&self, status: reqwest::StatusCode, error_text: String) -> Error {
         match status.as_u16() {
             401 | 403 => Error::provider(
                 "namesilo",
@@ -564,7 +566,10 @@ impl NameSiloProvider {
             404 => Error::not_found("Resource not found"),
             429 => Error::provider(
                 "namesilo",
-                format!("Rate limit exceeded. Please retry later. Status: {}", status),
+                format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ),
             ),
             500..=599 => Error::provider(
                 "namesilo",
@@ -605,7 +610,11 @@ impl DnsProvider for NameSiloProvider {
                 Ok(id) => (id, false),
                 Err(Error::NotFound { .. }) => {
                     tracing::info!("DNS record does not exist, creating: {}", record_name);
-                    (self.create_record(&domain, &host, record_type, new_ip).await?, true)
+                    (
+                        self.create_record(&domain, &host, record_type, new_ip)
+                            .await?,
+                        true,
+                    )
                 }
                 Err(e) => return Err(e),
             };
@@ -739,11 +748,7 @@ impl ProviderConfigurable for NameSiloConfigurable {
         Ok(())
     }
 
-    fn create_provider(
-        &self,
-        config: &Value,
-        dry_run: bool,
-    ) -> Result<Box<dyn DnsProvider>> {
+    fn create_provider(&self, config: &Value, dry_run: bool) -> Result<Box<dyn DnsProvider>> {
         let api_key = config
             .get("api_key")
             .and_then(|v| v.as_str())
@@ -839,15 +844,30 @@ mod tests {
 
     #[test]
     fn test_extract_domain() {
-        assert_eq!(NameSiloProvider::extract_domain("example.com").unwrap(), "example.com");
-        assert_eq!(NameSiloProvider::extract_domain("www.example.com").unwrap(), "example.com");
-        assert_eq!(NameSiloProvider::extract_domain("sub.sub.example.com").unwrap(), "example.com");
+        assert_eq!(
+            NameSiloProvider::extract_domain("example.com").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            NameSiloProvider::extract_domain("www.example.com").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            NameSiloProvider::extract_domain("sub.sub.example.com").unwrap(),
+            "example.com"
+        );
     }
 
     #[test]
     fn test_extract_host() {
         assert_eq!(NameSiloProvider::extract_host("example.com").unwrap(), "@");
-        assert_eq!(NameSiloProvider::extract_host("www.example.com").unwrap(), "www");
-        assert_eq!(NameSiloProvider::extract_host("sub.sub.example.com").unwrap(), "sub.sub");
+        assert_eq!(
+            NameSiloProvider::extract_host("www.example.com").unwrap(),
+            "www"
+        );
+        assert_eq!(
+            NameSiloProvider::extract_host("sub.sub.example.com").unwrap(),
+            "sub.sub"
+        );
     }
 }

@@ -159,8 +159,7 @@ async fn real_netlink_creates_socket_and_receives_events() {
 
     // Set initial IP BEFORE starting watch()
     println!("Setting initial IP: 192.168.99.1/24");
-    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
-        .expect("set initial IP succeeds");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24").expect("set initial IP succeeds");
 
     // Wait for interface to stabilize
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -185,15 +184,12 @@ async fn real_netlink_creates_socket_and_receives_events() {
     // Change IP to trigger event
     println!("Changing IP to: 192.168.99.2/24");
     flush_interface_ips(TEST_INTERFACE).expect("flush succeeds");
-    set_interface_ip(TEST_INTERFACE, "192.168.99.2/24")
-        .expect("set new IP succeeds");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.2/24").expect("set new IP succeeds");
 
     // Wait for event
     println!("Waiting for event...");
-    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
-        Duration::from_secs(5),
-        stream.next()
-    ).await;
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> =
+        tokio::time::timeout(Duration::from_secs(5), stream.next()).await;
 
     teardown();
 
@@ -218,33 +214,31 @@ async fn real_netlink_filters_specific_interface() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Set IP on TEST_INTERFACE (should trigger event)
-    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
-        .expect("set IP succeeds");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24").expect("set IP succeeds");
 
     // Change IP to trigger event
     flush_interface_ips(TEST_INTERFACE).expect("flush succeeds");
-    set_interface_ip(TEST_INTERFACE, "192.168.99.2/24")
-        .expect("set new IP succeeds");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.2/24").expect("set new IP succeeds");
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Set IP on TEST_INTERFACE_2 (should NOT trigger event)
-    set_interface_ip(TEST_INTERFACE_2, "10.0.0.1/24")
-        .expect("set IP on second interface succeeds");
+    set_interface_ip(TEST_INTERFACE_2, "10.0.0.1/24").expect("set IP on second interface succeeds");
 
     flush_interface_ips(TEST_INTERFACE_2).expect("flush second interface succeeds");
     set_interface_ip(TEST_INTERFACE_2, "10.0.0.2/24")
         .expect("set new IP on second interface succeeds");
 
     // Wait for event (should only get event from TEST_INTERFACE)
-    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
-        Duration::from_secs(3),
-        stream.next()
-    ).await;
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> =
+        tokio::time::timeout(Duration::from_secs(3), stream.next()).await;
 
     teardown();
 
-    assert!(event.is_ok(), "Should receive event from monitored interface");
+    assert!(
+        event.is_ok(),
+        "Should receive event from monitored interface"
+    );
 
     let event = event.unwrap().expect("Event should not be None");
     // Should be 192.168.99.2 (from TEST_INTERFACE), not 10.0.0.2 (from TEST_INTERFACE_2)
@@ -268,8 +262,7 @@ async fn real_netlink_debounce_rapid_changes() {
     for i in 1..=5 {
         flush_interface_ips(TEST_INTERFACE).expect("flush succeeds");
         let ip = format!("192.168.99.{}/24", i);
-        set_interface_ip(TEST_INTERFACE, &ip)
-            .expect("set IP succeeds");
+        set_interface_ip(TEST_INTERFACE, &ip).expect("set IP succeeds");
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
@@ -311,21 +304,21 @@ async fn real_netlink_ipv4_changes_trigger_events() {
 
     setup().expect("setup succeeds");
 
-    let source = NetlinkIpSource::new(Some(TEST_INTERFACE.to_string()), Some(ddns_ip_netlink::ConfigIpVersion::V4));
+    let source = NetlinkIpSource::new(
+        Some(TEST_INTERFACE.to_string()),
+        Some(ddns_ip_netlink::ConfigIpVersion::V4),
+    );
     let mut stream = source.watch();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Change IPv4 address
     flush_interface_ips(TEST_INTERFACE).expect("flush succeeds");
-    set_interface_ip(TEST_INTERFACE, "203.0.113.1/24")
-        .expect("set IPv4 succeeds");
+    set_interface_ip(TEST_INTERFACE, "203.0.113.1/24").expect("set IPv4 succeeds");
 
     // Wait for event
-    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
-        Duration::from_secs(5),
-        stream.next()
-    ).await;
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> =
+        tokio::time::timeout(Duration::from_secs(5), stream.next()).await;
 
     teardown();
 
@@ -342,27 +335,30 @@ async fn real_netlink_ipv6_changes_trigger_events() {
 
     setup().expect("setup succeeds");
 
-    let source = NetlinkIpSource::new(Some(TEST_INTERFACE.to_string()), Some(ddns_ip_netlink::ConfigIpVersion::V6));
+    let source = NetlinkIpSource::new(
+        Some(TEST_INTERFACE.to_string()),
+        Some(ddns_ip_netlink::ConfigIpVersion::V6),
+    );
     let mut stream = source.watch();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Change IPv6 address
-    set_interface_ip(TEST_INTERFACE, "2001:db8::1/128")
-        .expect("set IPv6 succeeds");
+    set_interface_ip(TEST_INTERFACE, "2001:db8::1/128").expect("set IPv6 succeeds");
 
     // Wait for event
-    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> = tokio::time::timeout(
-        Duration::from_secs(5),
-        stream.next()
-    ).await;
+    let event: Result<Option<IpChangeEvent>, tokio::time::error::Elapsed> =
+        tokio::time::timeout(Duration::from_secs(5), stream.next()).await;
 
     teardown();
 
     assert!(event.is_ok(), "Should receive IPv6 event");
 
     let event = event.unwrap().expect("Event should not be None");
-    assert_eq!(event.new_ip, IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)));
+    assert_eq!(
+        event.new_ip,
+        IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1))
+    );
 }
 
 #[tokio::test]
@@ -383,10 +379,7 @@ async fn real_netlink_filters_loopback_addresses() {
     // The filtering happens in NetlinkIpSource implementation
 
     // Wait a bit to see if any events arrive
-    let event = tokio::time::timeout(
-        Duration::from_millis(500),
-        stream.next()
-    ).await;
+    let event = tokio::time::timeout(Duration::from_millis(500), stream.next()).await;
 
     teardown();
 
@@ -403,8 +396,7 @@ async fn real_netlink_current_returns_valid_ip() {
     setup().expect("setup succeeds");
 
     // Set a known IP on the test interface
-    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24")
-        .expect("set IP succeeds");
+    set_interface_ip(TEST_INTERFACE, "192.168.99.1/24").expect("set IP succeeds");
 
     let source = NetlinkIpSource::new(Some(TEST_INTERFACE.to_string()), None);
 
@@ -416,5 +408,8 @@ async fn real_netlink_current_returns_valid_ip() {
     assert!(ip.is_ok(), "current() should succeed");
     let ip = ip.unwrap();
     // Should return an IP (either 192.168.99.1 or another valid IP)
-    assert!(ip.is_ipv4() || ip.is_ipv6(), "Should return a valid IP address");
+    assert!(
+        ip.is_ipv4() || ip.is_ipv6(),
+        "Should return a valid IP address"
+    );
 }

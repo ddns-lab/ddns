@@ -346,7 +346,7 @@ impl IpSource for NetlinkIpSource {
             // SocketAddr::new(pid, groups) - but we need to bind first to get a valid pid
             // Use 0 for pid (kernel assigns), and set multicast groups
             let addr = SocketAddr::new(
-                0,  // pid (0 = kernel assigns)
+                0, // pid (0 = kernel assigns)
                 (libc::RTMGRP_IPV4_IFADDR | libc::RTMGRP_IPV6_IFADDR) as u32,
             );
 
@@ -385,7 +385,12 @@ impl IpSource for NetlinkIpSource {
                     tracing::debug!("Found {} IP addresses total", addrs.len());
                     for (i, addr) in addrs.iter().enumerate() {
                         let is_public = temp_source.is_public_ip(addr);
-                        tracing::debug!("  [{}] {} ({})", i + 1, addr, if is_public { "public" } else { "private" });
+                        tracing::debug!(
+                            "  [{}] {} ({})",
+                            i + 1,
+                            addr,
+                            if is_public { "public" } else { "private" }
+                        );
                     }
 
                     // Get "any" IPs (first IP of each version, for logging)
@@ -394,22 +399,18 @@ impl IpSource for NetlinkIpSource {
 
                     // Get public IPs (for triggering DNS updates)
                     last_public_v4 = match temp_source.version {
-                        Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
-                            addrs
-                                .iter()
-                                .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
-                                .copied()
-                        }
+                        Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => addrs
+                            .iter()
+                            .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
+                            .copied(),
                         Some(ConfigIpVersion::V6) => None,
                     };
 
                     last_public_v6 = match temp_source.version {
-                        Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
-                            addrs
-                                .iter()
-                                .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
-                                .copied()
-                        }
+                        Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => addrs
+                            .iter()
+                            .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
+                            .copied(),
                         Some(ConfigIpVersion::V4) => None,
                     };
 
@@ -436,7 +437,7 @@ impl IpSource for NetlinkIpSource {
                         fd,
                         recv_buf.as_mut_ptr() as *mut libc::c_void,
                         recv_buf.len(),
-                        0
+                        0,
                     )
                 };
 
@@ -461,19 +462,29 @@ impl IpSource for NetlinkIpSource {
                         x if x == libc::RTM_DELLINK as u16 => "RTM_DELLINK",
                         _ => "UNKNOWN",
                     };
-                    tracing::debug!("Received netlink: type={} ({}), len={}, flags={}",
-                        msg_type, msg_type_name, nread, msg_flags);
+                    tracing::debug!(
+                        "Received netlink: type={} ({}), len={}, flags={}",
+                        msg_type,
+                        msg_type_name,
+                        nread,
+                        msg_flags
+                    );
 
                     // Check if this is an address event
-                    if msg_type == libc::RTM_NEWADDR as u16
-                        || msg_type == libc::RTM_DELADDR as u16
+                    if msg_type == libc::RTM_NEWADDR as u16 || msg_type == libc::RTM_DELADDR as u16
                     {
                         let now = std::time::Instant::now();
 
                         // Apply debounce
                         if now.duration_since(last_event) > debounce_duration {
-                            tracing::info!("--- Address event detected ({}), querying IPs ---",
-                                if msg_type == libc::RTM_NEWADDR as u16 { "NEWADDR" } else { "DELADDR" });
+                            tracing::info!(
+                                "--- Address event detected ({}), querying IPs ---",
+                                if msg_type == libc::RTM_NEWADDR as u16 {
+                                    "NEWADDR"
+                                } else {
+                                    "DELADDR"
+                                }
+                            );
 
                             // Re-query all IPs
                             match temp_source.query_addresses_proc() {
@@ -481,8 +492,12 @@ impl IpSource for NetlinkIpSource {
                                     tracing::debug!("Query returned {} addresses", addrs.len());
                                     for (i, addr) in addrs.iter().enumerate() {
                                         let is_public = temp_source.is_public_ip(addr);
-                                        tracing::debug!("  [{}] {} ({})", i + 1, addr,
-                                            if is_public { "public" } else { "private" });
+                                        tracing::debug!(
+                                            "  [{}] {} ({})",
+                                            i + 1,
+                                            addr,
+                                            if is_public { "public" } else { "private" }
+                                        );
                                     }
 
                                     // First, find all IPv4 and IPv6 addresses (for logging)
@@ -491,28 +506,29 @@ impl IpSource for NetlinkIpSource {
 
                                     // Then, find only public IPs (for triggering DNS updates)
                                     let public_v4 = match temp_source.version {
-                                        Some(ConfigIpVersion::V4) | Some(ConfigIpVersion::Both) | None => {
-                                            addrs
-                                                .iter()
-                                                .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
-                                                .copied()
-                                        }
+                                        Some(ConfigIpVersion::V4)
+                                        | Some(ConfigIpVersion::Both)
+                                        | None => addrs
+                                            .iter()
+                                            .find(|ip| ip.is_ipv4() && temp_source.is_public_ip(ip))
+                                            .copied(),
                                         Some(ConfigIpVersion::V6) => None,
                                     };
 
                                     let public_v6 = match temp_source.version {
-                                        Some(ConfigIpVersion::V6) | Some(ConfigIpVersion::Both) | None => {
-                                            addrs
-                                                .iter()
-                                                .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
-                                                .copied()
-                                        }
+                                        Some(ConfigIpVersion::V6)
+                                        | Some(ConfigIpVersion::Both)
+                                        | None => addrs
+                                            .iter()
+                                            .find(|ip| ip.is_ipv6() && temp_source.is_public_ip(ip))
+                                            .copied(),
                                         Some(ConfigIpVersion::V4) => None,
                                     };
 
                                     // Log all IP changes for monitoring (both private and public)
                                     if last_any_v4 != any_v4 {
-                                        let is_public = any_v4.map_or(false, |ip| temp_source.is_public_ip(&ip));
+                                        let is_public = any_v4
+                                            .map_or(false, |ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv4 any changed: {:?} -> {:?} [{}]",
                                             last_any_v4,
@@ -523,7 +539,8 @@ impl IpSource for NetlinkIpSource {
                                     }
 
                                     if last_any_v6 != any_v6 {
-                                        let is_public = any_v6.map_or(false, |ip| temp_source.is_public_ip(&ip));
+                                        let is_public = any_v6
+                                            .map_or(false, |ip| temp_source.is_public_ip(&ip));
                                         tracing::info!(
                                             "IPv6 any changed: {:?} -> {:?} [{}]",
                                             last_any_v6,
@@ -536,17 +553,26 @@ impl IpSource for NetlinkIpSource {
                                     // Only trigger DNS updates for public IP changes
                                     if last_public_v4 != public_v4 {
                                         if let Some(v4) = public_v4 {
-                                            tracing::info!("→ Triggering DNS update for public IPv4: {} (was: {:?})", v4, last_public_v4);
+                                            tracing::info!(
+                                                "→ Triggering DNS update for public IPv4: {} (was: {:?})",
+                                                v4,
+                                                last_public_v4
+                                            );
                                             let event = IpChangeEvent::new(v4, last_public_v4);
                                             if tx.send(event).is_err() {
-                                                tracing::error!("Receiver dropped, stopping monitor");
+                                                tracing::error!(
+                                                    "Receiver dropped, stopping monitor"
+                                                );
                                                 break;
                                             }
                                             // Only update last_public_v4 when we have a new public IP
                                             // This preserves the previous IP when current IP is deleted
                                             last_public_v4 = public_v4;
                                         } else if last_public_v4.is_some() {
-                                            tracing::warn!("→ No public IPv4 available, DNS update skipped (was: {:?})", last_public_v4);
+                                            tracing::warn!(
+                                                "→ No public IPv4 available, DNS update skipped (was: {:?})",
+                                                last_public_v4
+                                            );
                                             // Don't update last_public_v4 when public IP is deleted
                                             // This preserves the previous IP for the next update
                                         }
@@ -554,16 +580,25 @@ impl IpSource for NetlinkIpSource {
 
                                     if last_public_v6 != public_v6 {
                                         if let Some(v6) = public_v6 {
-                                            tracing::info!("→ Triggering DNS update for public IPv6: {} (was: {:?})", v6, last_public_v6);
+                                            tracing::info!(
+                                                "→ Triggering DNS update for public IPv6: {} (was: {:?})",
+                                                v6,
+                                                last_public_v6
+                                            );
                                             let event = IpChangeEvent::new(v6, last_public_v6);
                                             if tx.send(event).is_err() {
-                                                tracing::error!("Receiver dropped, stopping monitor");
+                                                tracing::error!(
+                                                    "Receiver dropped, stopping monitor"
+                                                );
                                                 break;
                                             }
                                             // Only update last_public_v6 when we have a new public IP
                                             last_public_v6 = public_v6;
                                         } else if last_public_v6.is_some() {
-                                            tracing::warn!("→ No public IPv6 available, DNS update skipped (was: {:?})", last_public_v6);
+                                            tracing::warn!(
+                                                "→ No public IPv6 available, DNS update skipped (was: {:?})",
+                                                last_public_v6
+                                            );
                                             // Don't update last_public_v6 when public IP is deleted
                                         }
                                     }
@@ -572,8 +607,13 @@ impl IpSource for NetlinkIpSource {
                                 }
                                 Err(e) => {
                                     // Don't stop monitoring on query failure, just log and continue
-                                    tracing::warn!("Failed to query addresses after netlink event: {}", e);
-                                    tracing::warn!("This may be a transient error, continuing to monitor...");
+                                    tracing::warn!(
+                                        "Failed to query addresses after netlink event: {}",
+                                        e
+                                    );
+                                    tracing::warn!(
+                                        "This may be a transient error, continuing to monitor..."
+                                    );
                                     // Still update last_event to avoid tight retry loop
                                     last_event = now;
                                 }

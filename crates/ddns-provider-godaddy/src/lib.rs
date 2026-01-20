@@ -133,7 +133,12 @@ impl GoDaddyProvider {
     /// # Security
     ///
     /// The API key and secret will NEVER be logged or displayed in error messages.
-    pub fn new(api_key: impl Into<String>, api_secret: impl Into<String>, ote: bool, dry_run: bool) -> Self {
+    pub fn new(
+        api_key: impl Into<String>,
+        api_secret: impl Into<String>,
+        ote: bool,
+        dry_run: bool,
+    ) -> Self {
         // Build HTTP client with timeout
         let client = reqwest::Client::builder()
             .timeout(DEFAULT_HTTP_TIMEOUT)
@@ -202,7 +207,10 @@ impl GoDaddyProvider {
         if parts.len() < 2 {
             return Err(Error::provider(
                 "godaddy",
-                format!("Invalid record name '{}': must contain at least one dot", record_name),
+                format!(
+                    "Invalid record name '{}': must contain at least one dot",
+                    record_name
+                ),
             ));
         }
 
@@ -239,7 +247,12 @@ impl GoDaddyProvider {
     }
 
     /// Get DNS record ID and current IP
-    async fn get_record(&self, domain: &str, record_type: &str, name: &str) -> Result<Option<(String, IpAddr)>> {
+    async fn get_record(
+        &self,
+        domain: &str,
+        record_type: &str,
+        name: &str,
+    ) -> Result<Option<(String, IpAddr)>> {
         let url = format!(
             "{}/v1/domains/{}/records/{}/{}",
             &self.api_base, domain, record_type, name
@@ -287,9 +300,9 @@ impl GoDaddyProvider {
             .and_then(|d| d.as_str())
             .ok_or_else(|| Error::provider("godaddy", "Missing 'data' in record"))?;
 
-        let ip: IpAddr = ip_str
-            .parse()
-            .map_err(|e| Error::provider("godaddy", format!("Invalid IP address '{}': {}", ip_str, e)))?;
+        let ip: IpAddr = ip_str.parse().map_err(|e| {
+            Error::provider("godaddy", format!("Invalid IP address '{}': {}", ip_str, e))
+        })?;
 
         // GoDaddy doesn't use record IDs, so we use a placeholder
         Ok(Some(("godaddy-record".to_string(), ip)))
@@ -418,12 +431,18 @@ impl GoDaddyProvider {
         match status.as_u16() {
             401 | 403 => Error::provider(
                 "godaddy",
-                format!("Authentication failed: Invalid API key or secret. Status: {}", status),
+                format!(
+                    "Authentication failed: Invalid API key or secret. Status: {}",
+                    status
+                ),
             ),
             404 => Error::not_found("Resource not found"),
             429 => Error::provider(
                 "godaddy",
-                format!("Rate limit exceeded. Please retry later. Status: {}", status),
+                format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ),
             ),
             500..=599 => Error::provider(
                 "godaddy",
@@ -459,15 +478,15 @@ impl DnsProvider for GoDaddyProvider {
         let host = Self::extract_host(record_name)?;
 
         // Step 3: Get current record (if exists)
-        let (_record_id, current_ip) =
-            match self.get_record(&domain, record_type, &host).await? {
-                Some((id, ip)) => (id, ip),
-                None => {
-                    tracing::info!("DNS record does not exist, creating: {}", record_name);
-                    self.create_record(&domain, &host, record_type, new_ip).await?;
-                    return Ok(UpdateResult::Created { new_ip });
-                }
-            };
+        let (_record_id, current_ip) = match self.get_record(&domain, record_type, &host).await? {
+            Some((id, ip)) => (id, ip),
+            None => {
+                tracing::info!("DNS record does not exist, creating: {}", record_name);
+                self.create_record(&domain, &host, record_type, new_ip)
+                    .await?;
+                return Ok(UpdateResult::Created { new_ip });
+            }
+        };
 
         // Step 4: If IP same, return Unchanged (idempotency)
         if current_ip == new_ip {
@@ -530,7 +549,10 @@ impl DnsProvider for GoDaddyProvider {
             });
         }
 
-        Err(Error::not_found(format!("DNS record not found: {}", record_name)))
+        Err(Error::not_found(format!(
+            "DNS record not found: {}",
+            record_name
+        )))
     }
 
     fn supports_record(&self, record_name: &str) -> bool {
@@ -613,11 +635,7 @@ impl ProviderConfigurable for GoDaddyConfigurable {
         Ok(())
     }
 
-    fn create_provider(
-        &self,
-        config: &Value,
-        dry_run: bool,
-    ) -> Result<Box<dyn DnsProvider>> {
+    fn create_provider(&self, config: &Value, dry_run: bool) -> Result<Box<dyn DnsProvider>> {
         let api_key = config
             .get("api_key")
             .and_then(|v| v.as_str())
@@ -629,16 +647,10 @@ impl ProviderConfigurable for GoDaddyConfigurable {
             .ok_or_else(|| Error::config("Missing api_secret in configuration"))?;
 
         // Check if OTE (test) environment should be used
-        let ote = config
-            .get("ote")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let ote = config.get("ote").and_then(|v| v.as_bool()).unwrap_or(false);
 
         Ok(Box::new(GoDaddyProvider::new(
-            api_key,
-            api_secret,
-            ote,
-            dry_run,
+            api_key, api_secret, ote, dry_run,
         )))
     }
 }
@@ -694,10 +706,7 @@ impl DnsProviderFactory for GoDaddyFactory {
         }
 
         Ok(Box::new(GoDaddyProvider::new(
-            api_key,
-            api_secret,
-            ote,
-            dry_run,
+            api_key, api_secret, ote, dry_run,
         )))
     }
 }
@@ -760,16 +769,31 @@ mod tests {
 
     #[test]
     fn test_extract_domain() {
-        assert_eq!(GoDaddyProvider::extract_domain("example.com").unwrap(), "example.com");
-        assert_eq!(GoDaddyProvider::extract_domain("www.example.com").unwrap(), "example.com");
-        assert_eq!(GoDaddyProvider::extract_domain("sub.sub.example.com").unwrap(), "example.com");
+        assert_eq!(
+            GoDaddyProvider::extract_domain("example.com").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            GoDaddyProvider::extract_domain("www.example.com").unwrap(),
+            "example.com"
+        );
+        assert_eq!(
+            GoDaddyProvider::extract_domain("sub.sub.example.com").unwrap(),
+            "example.com"
+        );
     }
 
     #[test]
     fn test_extract_host() {
         assert_eq!(GoDaddyProvider::extract_host("example.com").unwrap(), "@");
-        assert_eq!(GoDaddyProvider::extract_host("www.example.com").unwrap(), "www");
-        assert_eq!(GoDaddyProvider::extract_host("sub.sub.example.com").unwrap(), "sub.sub");
+        assert_eq!(
+            GoDaddyProvider::extract_host("www.example.com").unwrap(),
+            "www"
+        );
+        assert_eq!(
+            GoDaddyProvider::extract_host("sub.sub.example.com").unwrap(),
+            "sub.sub"
+        );
     }
 
     #[test]

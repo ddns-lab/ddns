@@ -208,7 +208,10 @@ impl DdnsEngine {
         // Get initial IP for logging (non-blocking - allows starting without IPs)
         match self.ip_source.current().await {
             Ok(ip) => info!("Initial IP: {}", ip),
-            Err(e) => info!("No initial IP available (will wait for netlink events): {}", e),
+            Err(e) => info!(
+                "No initial IP available (will wait for netlink events): {}",
+                e
+            ),
         }
 
         // Watch for IP changes
@@ -240,10 +243,12 @@ impl DdnsEngine {
             // Production mode: wait for SIGINT/SIGTERM
             #[cfg(unix)]
             {
-                let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                    .map_err(|e| anyhow::anyhow!("Failed to setup SIGTERM handler: {}", e))?;
-                let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-                    .map_err(|e| anyhow::anyhow!("Failed to setup SIGINT handler: {}", e))?;
+                let mut sigterm =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .map_err(|e| anyhow::anyhow!("Failed to setup SIGTERM handler: {}", e))?;
+                let mut sigint =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                        .map_err(|e| anyhow::anyhow!("Failed to setup SIGINT handler: {}", e))?;
 
                 loop {
                     tokio::select! {

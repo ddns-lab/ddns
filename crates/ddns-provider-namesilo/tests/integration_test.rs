@@ -2,8 +2,8 @@
 //
 // These tests demonstrate the expected behavior patterns.
 
-use ddns_provider_namesilo::NameSiloProvider;
 use ddns_core::traits::DnsProvider;
+use ddns_provider_namesilo::NameSiloProvider;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// Test dry-run mode

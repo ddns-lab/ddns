@@ -3,17 +3,14 @@
 // These tests demonstrate the expected behavior patterns.
 // Full HTTP mocking requires refactoring the provider to accept a custom base URL.
 
-use ddns_provider_aliyun::AliyunProvider;
 use ddns_core::traits::DnsProvider;
+use ddns_provider_aliyun::AliyunProvider;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// Test dry-run mode
 #[test]
 fn test_dry_run_mode() {
-    let _provider = AliyunProvider::new_dry_run(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_dry_run("test_access_key_id", "test_access_key_secret");
 
     // In dry-run mode, update_record would:
     // 1. Perform all GET requests (DescribeDomainRecords, DescribeDomainRecordInfo)
@@ -30,10 +27,7 @@ fn test_dry_run_mode() {
 /// 3. Returns UpdateResult::Created
 #[tokio::test]
 async fn test_update_record_not_found_creates() {
-    let _provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     // This test documents the expected behavior:
     // - When DescribeDomainRecords returns no matching records
@@ -50,10 +44,7 @@ async fn test_update_record_not_found_creates() {
 /// 4. NO UpdateDomainRecord API call should be made
 #[tokio::test]
 async fn test_update_record_idempotent() {
-    let _provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     // This test documents the expected behavior:
     // - When the current IP matches the new IP
@@ -69,10 +60,7 @@ async fn test_update_record_idempotent() {
 /// 3. Error message indicates authentication failure
 #[tokio::test]
 async fn test_update_record_auth_failure() {
-    let _provider = AliyunProvider::new_live(
-        "invalid_access_key_id",
-        "invalid_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("invalid_access_key_id", "invalid_access_key_secret");
 
     // This test documents the expected behavior:
     // - When API returns 403 Forbidden
@@ -88,10 +76,7 @@ async fn test_update_record_auth_failure() {
 /// 3. Engine will handle retry with backoff
 #[tokio::test]
 async fn test_update_record_rate_limited() {
-    let _provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     // This test documents the expected behavior:
     // - When API returns 429 Too Many Requests
@@ -108,10 +93,7 @@ async fn test_update_record_rate_limited() {
 /// 4. Returns UpdateResult::Updated
 #[tokio::test]
 async fn test_update_aaaa_record() {
-    let _provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     let _new_ip = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 0x100);
 
@@ -124,10 +106,7 @@ async fn test_update_aaaa_record() {
 /// Test supports_record validation
 #[test]
 fn test_supports_record() {
-    let provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     // Valid domain names
     assert!(provider.supports_record("example.com"));
@@ -142,10 +121,7 @@ fn test_supports_record() {
 /// Test provider_name
 #[test]
 fn test_provider_name() {
-    let provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     assert_eq!(provider.provider_name(), "aliyun");
 }
@@ -159,10 +135,7 @@ fn test_provider_name() {
 /// 4. Returns UpdateResult::Updated
 #[tokio::test]
 async fn test_update_record_success() {
-    let _provider = AliyunProvider::new_live(
-        "test_access_key_id",
-        "test_access_key_secret",
-    );
+    let _provider = AliyunProvider::new_live("test_access_key_id", "test_access_key_secret");
 
     // This test documents the expected behavior:
     // - When current IP is 192.0.2.1 and new IP is 192.0.2.100

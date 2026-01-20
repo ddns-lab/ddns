@@ -18,8 +18,10 @@
 mod common;
 
 use common::*;
-use ddns_core::config::{DdnsConfig, EngineConfig, IpSourceConfig, ProviderConfig, RecordConfig, StateStoreConfig};
 use ddns_core::DdnsEngine;
+use ddns_core::config::{
+    DdnsConfig, EngineConfig, IpSourceConfig, ProviderConfig, RecordConfig, StateStoreConfig,
+};
 use ddns_core::traits::IpChangeEvent;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -135,11 +137,7 @@ async fn netlink_multiple_records_all_updated() {
 
     // Assert: All 3 records updated
     let count = provider_arc.update_call_count();
-    assert_eq!(
-        count, 3,
-        "Expected 3 updates for 3 records, got {}",
-        count
-    );
+    assert_eq!(count, 3, "Expected 3 updates for 3 records, got {}", count);
 
     let records = provider_arc.updated_records();
     assert_eq!(records.len(), 3);
@@ -266,11 +264,7 @@ async fn netlink_ipv4_events_trigger_updates() {
 
     // Assert: Update occurred
     let count = provider_arc.update_call_count();
-    assert_eq!(
-        count, 1,
-        "Expected 1 update for IPv4 change, got {}",
-        count
-    );
+    assert_eq!(count, 1, "Expected 1 update for IPv4 change, got {}", count);
 }
 
 #[tokio::test]
@@ -312,11 +306,7 @@ async fn netlink_ipv6_events_trigger_updates() {
 
     // Assert: Update occurred
     let count = provider_arc.update_call_count();
-    assert_eq!(
-        count, 1,
-        "Expected 1 update for IPv6 change, got {}",
-        count
-    );
+    assert_eq!(count, 1, "Expected 1 update for IPv6 change, got {}", count);
 }
 
 #[tokio::test]

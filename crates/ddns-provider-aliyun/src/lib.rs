@@ -194,8 +194,8 @@ impl AliyunProvider {
         let signing_key = format!("{}&", self.access_key_secret);
 
         // Create HMAC-SHA1
-        let mut mac = Hmac::<Sha1>::new_from_slice(signing_key.as_bytes())
-            .expect("HMAC can accept key size");
+        let mut mac =
+            Hmac::<Sha1>::new_from_slice(signing_key.as_bytes()).expect("HMAC can accept key size");
 
         mac.update(params.as_bytes());
 
@@ -209,7 +209,14 @@ impl AliyunProvider {
         let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         // Generate unique nonce for this request (required by Aliyun)
         // Use timestamp + nanoseconds for better uniqueness
-        let nonce = format!("{}{}", timestamp, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let nonce = format!(
+            "{}{}",
+            timestamp,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         let mut query_pairs: Vec<(String, String)> = vec![
             ("Action".to_string(), action.to_string()),
             ("Version".to_string(), API_VERSION.to_string()),
@@ -279,11 +286,7 @@ impl AliyunProvider {
     /// ```http
     /// GET /?Action=DescribeDomainRecords&...
     /// ```
-    async fn get_record_id(
-        &self,
-        record_name: &str,
-        record_type: &str,
-    ) -> Result<String> {
+    async fn get_record_id(&self, record_name: &str, record_type: &str) -> Result<String> {
         tracing::debug!(
             "Looking up Aliyun record ID: {} (type: {})",
             record_name,
@@ -299,7 +302,10 @@ impl AliyunProvider {
         if parts.len() < 2 {
             return Err(Error::provider(
                 "aliyun",
-                format!("Invalid record name '{}': must be a fully qualified domain name", record_name)
+                format!(
+                    "Invalid record name '{}': must be a fully qualified domain name",
+                    record_name
+                ),
             ));
         }
 
@@ -314,7 +320,9 @@ impl AliyunProvider {
 
         tracing::debug!(
             "Parsed domain: domain_name={}, record_name={}, record_type={}",
-            domain_name, record_name, record_type
+            domain_name,
+            record_name,
+            record_type
         );
 
         // Build API parameters
@@ -322,10 +330,7 @@ impl AliyunProvider {
         // We'll filter by Type and then find the matching record in the response
         let url = self.build_api_url(
             "DescribeDomainRecords",
-            &[
-                ("DomainName", &domain_name),
-                ("Type", record_type),
-            ],
+            &[("DomainName", &domain_name), ("Type", record_type)],
         );
 
         tracing::debug!("Aliyun API URL: {}", url);
@@ -392,9 +397,10 @@ impl AliyunProvider {
             };
         }
 
-        let json: Value = response.json().await.map_err(|e| {
-            Error::provider("aliyun", format!("Failed to parse response: {}", e))
-        })?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| Error::provider("aliyun", format!("Failed to parse response: {}", e)))?;
 
         // Aliyun returns: { "DomainRecords": { "Record": [...] } }
         let records = json["DomainRecords"]["Record"].as_array().ok_or_else(|| {
@@ -414,14 +420,15 @@ impl AliyunProvider {
         };
 
         // Find the record that matches our record_name (by RR field)
-        let record = records.iter().find(|r| {
-            r["RR"].as_str().map_or(false, |rr| rr == expected_rr)
-        }).ok_or_else(|| {
-            Error::not_found(format!(
-                "DNS record not found: {} (type: {}, looking for RR={})",
-                record_name, record_type, expected_rr
-            ))
-        })?;
+        let record = records
+            .iter()
+            .find(|r| r["RR"].as_str().map_or(false, |rr| rr == expected_rr))
+            .ok_or_else(|| {
+                Error::not_found(format!(
+                    "DNS record not found: {} (type: {}, looking for RR={})",
+                    record_name, record_type, expected_rr
+                ))
+            })?;
 
         let record_id = record["RecordId"].as_str().ok_or_else(|| {
             Error::provider(
@@ -431,10 +438,7 @@ impl AliyunProvider {
         })?;
 
         let current_ip = record["Value"].as_str().ok_or_else(|| {
-            Error::provider(
-                "aliyun",
-                "Invalid response format: Value is not a string",
-            )
+            Error::provider("aliyun", "Invalid response format: Value is not a string")
         })?;
 
         tracing::debug!(
@@ -485,7 +489,10 @@ impl AliyunProvider {
         if parts.len() < 2 {
             return Err(Error::provider(
                 "aliyun",
-                format!("Invalid record name '{}': must be a fully qualified domain name", record_name)
+                format!(
+                    "Invalid record name '{}': must be a fully qualified domain name",
+                    record_name
+                ),
             ));
         }
 
@@ -496,7 +503,7 @@ impl AliyunProvider {
         let rr = if parts.len() > 2 {
             parts[..parts.len() - 2].join(".")
         } else {
-            "@".to_string()  // @ represents the root domain
+            "@".to_string() // @ represents the root domain
         };
 
         let url = self.build_api_url(
@@ -512,10 +519,7 @@ impl AliyunProvider {
 
         // In dry-run mode, log the intended creation and return success
         if self.dry_run {
-            tracing::info!(
-                "[DRY-RUN] Would send POST request to {}",
-                url
-            );
+            tracing::info!("[DRY-RUN] Would send POST request to {}", url);
             // Return a dummy record ID
             return Ok("dry-run-record-id".to_string());
         }
@@ -570,9 +574,10 @@ impl AliyunProvider {
             };
         }
 
-        let record_json: Value = response.json().await.map_err(|e| {
-            Error::provider("aliyun", format!("Failed to parse response: {}", e))
-        })?;
+        let record_json: Value = response
+            .json()
+            .await
+            .map_err(|e| Error::provider("aliyun", format!("Failed to parse response: {}", e)))?;
 
         let record_id = record_json["RecordId"].as_str().ok_or_else(|| {
             Error::provider(
@@ -592,17 +597,18 @@ impl AliyunProvider {
     }
 
     /// Get current record value by querying via record_name
-    async fn get_current_record_by_name(&self, record_name: &str, record_type: &str) -> Result<IpAddr> {
+    async fn get_current_record_by_name(
+        &self,
+        record_name: &str,
+        record_type: &str,
+    ) -> Result<IpAddr> {
         // Parse record name to extract domain
         let parts: Vec<&str> = record_name.split('.').collect();
         let domain_name = parts[parts.len() - 2..].join(".");
 
         let url = self.build_api_url(
             "DescribeDomainRecords",
-            &[
-                ("DomainName", &domain_name),
-                ("Type", record_type),
-            ],
+            &[("DomainName", &domain_name), ("Type", record_type)],
         );
 
         let response = self
@@ -652,9 +658,10 @@ impl AliyunProvider {
             };
         }
 
-        let json: Value = response.json().await.map_err(|e| {
-            Error::provider("aliyun", format!("Failed to parse response: {}", e))
-        })?;
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| Error::provider("aliyun", format!("Failed to parse response: {}", e)))?;
 
         let records = json["DomainRecords"]["Record"].as_array().ok_or_else(|| {
             Error::provider(
@@ -663,15 +670,12 @@ impl AliyunProvider {
             )
         })?;
 
-        let record = records.first().ok_or_else(|| {
-            Error::not_found(format!("DNS record not found: {}", record_name))
-        })?;
+        let record = records
+            .first()
+            .ok_or_else(|| Error::not_found(format!("DNS record not found: {}", record_name)))?;
 
         let current_ip_str = record["Value"].as_str().ok_or_else(|| {
-            Error::provider(
-                "aliyun",
-                "Invalid response format: Value is not a string",
-            )
+            Error::provider("aliyun", "Invalid response format: Value is not a string")
         })?;
 
         let current_ip: IpAddr = current_ip_str
@@ -690,11 +694,7 @@ impl AliyunProvider {
         new_ip: IpAddr,
         _previous_ip: IpAddr,
     ) -> Result<()> {
-        tracing::info!(
-            "Updating Aliyun DNS record: {} -> {}",
-            record_name,
-            new_ip
-        );
+        tracing::info!("Updating Aliyun DNS record: {} -> {}", record_name, new_ip);
 
         // Extract RR (host record) and DomainName from full record name
         // For "ddns-test.warzone.cn": RR = "ddns-test", DomainName = "warzone.cn"
@@ -714,7 +714,7 @@ impl AliyunProvider {
             "UpdateDomainRecord",
             &[
                 ("RecordId", record_id),
-                ("DomainName", &domain_name),  // DomainName is required for UpdateDomainRecord
+                ("DomainName", &domain_name), // DomainName is required for UpdateDomainRecord
                 ("RR", &rr),
                 ("Type", record_type),
                 ("Value", &new_ip.to_string()),
@@ -724,10 +724,7 @@ impl AliyunProvider {
 
         // In dry-run mode, log the intended update and return success
         if self.dry_run {
-            tracing::info!(
-                "[DRY-RUN] Would send POST request to {}",
-                url
-            );
+            tracing::info!("[DRY-RUN] Would send POST request to {}", url);
             return Ok(());
         }
 
@@ -832,22 +829,22 @@ impl DnsProvider for AliyunProvider {
         );
 
         // Step 1: Get record ID (create if not exists)
-        let (record_id, is_newly_created) =
-            match self.get_record_id(record_name, record_type).await {
-                Ok(id) => (id, false),
-                Err(Error::NotFound { .. }) => {
-                    tracing::info!(
-                        "DNS record does not exist, creating: {} ({})",
-                        record_name,
-                        record_type
-                    );
-                    (
-                        self.create_record(record_name, record_type, new_ip).await?,
-                        true,
-                    )
-                }
-                Err(e) => return Err(e),
-            };
+        let (record_id, is_newly_created) = match self.get_record_id(record_name, record_type).await
+        {
+            Ok(id) => (id, false),
+            Err(Error::NotFound { .. }) => {
+                tracing::info!(
+                    "DNS record does not exist, creating: {} ({})",
+                    record_name,
+                    record_type
+                );
+                (
+                    self.create_record(record_name, record_type, new_ip).await?,
+                    true,
+                )
+            }
+            Err(e) => return Err(e),
+        };
 
         // If record was just created, return Created result
         if is_newly_created {
@@ -860,7 +857,9 @@ impl DnsProvider for AliyunProvider {
         }
 
         // Step 2: Get current record to check if IP matches
-        let current_ip = self.get_current_record_by_name(record_name, record_type).await?;
+        let current_ip = self
+            .get_current_record_by_name(record_name, record_type)
+            .await?;
 
         // Step 3: If IP matches, return Unchanged (idempotency)
         if current_ip == new_ip {
@@ -956,7 +955,9 @@ impl ProviderConfigurable for AliyunConfigurable {
         }
 
         if access_key_secret.is_empty() {
-            return Err(Error::config("DDNS_ALIYUN_ACCESS_KEY_SECRET cannot be empty"));
+            return Err(Error::config(
+                "DDNS_ALIYUN_ACCESS_KEY_SECRET cannot be empty",
+            ));
         }
 
         Ok(serde_json::json!({
@@ -996,11 +997,7 @@ impl ProviderConfigurable for AliyunConfigurable {
     ///
     /// - `config`: Configuration JSON with access_key_id, access_key_secret
     /// - `dry_run`: Whether to run in dry-run mode
-    fn create_provider(
-        &self,
-        config: &Value,
-        dry_run: bool,
-    ) -> Result<Box<dyn DnsProvider>> {
+    fn create_provider(&self, config: &Value, dry_run: bool) -> Result<Box<dyn DnsProvider>> {
         let access_key_id = config
             .get("access_key_id")
             .and_then(|v| v.as_str())
@@ -1059,9 +1056,7 @@ impl DnsProviderFactory for AliyunFactory {
             == "dry-run";
 
         if dry_run {
-            tracing::warn!(
-                "Aliyun provider running in DRY-RUN mode - no changes will be made"
-            );
+            tracing::warn!("Aliyun provider running in DRY-RUN mode - no changes will be made");
         }
 
         Ok(Box::new(AliyunProvider::new(
@@ -1108,8 +1103,14 @@ mod tests {
         let provider_dry = AliyunProvider::new_dry_run("id", "secret");
         let provider_live = AliyunProvider::new_live("id", "secret");
 
-        assert!(provider_dry.dry_run, "Dry-run provider should have dry_run=true");
-        assert!(!provider_live.dry_run, "Live provider should have dry_run=false");
+        assert!(
+            provider_dry.dry_run,
+            "Dry-run provider should have dry_run=true"
+        );
+        assert!(
+            !provider_live.dry_run,
+            "Live provider should have dry_run=false"
+        );
     }
 
     #[test]

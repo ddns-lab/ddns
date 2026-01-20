@@ -925,11 +925,7 @@ impl ProviderConfigurable for CloudflareConfigurable {
     ///
     /// - `config`: Configuration JSON with api_token, zone_id, account_id
     /// - `dry_run`: Whether to run in dry-run mode
-    fn create_provider(
-        &self,
-        config: &Value,
-        dry_run: bool,
-    ) -> Result<Box<dyn DnsProvider>> {
+    fn create_provider(&self, config: &Value, dry_run: bool) -> Result<Box<dyn DnsProvider>> {
         let api_token = config
             .get("api_token")
             .and_then(|v| v.as_str())
@@ -946,10 +942,7 @@ impl ProviderConfigurable for CloudflareConfigurable {
             .map(|s| s.to_string());
 
         Ok(Box::new(CloudflareProvider::new(
-            api_token,
-            zone_id,
-            account_id,
-            dry_run,
+            api_token, zone_id, account_id, dry_run,
         )))
     }
 }
@@ -998,16 +991,11 @@ impl DnsProviderFactory for CloudflareFactory {
             == "dry-run";
 
         if dry_run {
-            tracing::warn!(
-                "Cloudflare provider running in DRY-RUN mode - no changes will be made"
-            );
+            tracing::warn!("Cloudflare provider running in DRY-RUN mode - no changes will be made");
         }
 
         Ok(Box::new(CloudflareProvider::new(
-            api_token,
-            zone_id,
-            account_id,
-            dry_run,
+            api_token, zone_id, account_id, dry_run,
         )))
     }
 }
