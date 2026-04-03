@@ -520,6 +520,15 @@ impl DdnsEngine {
                     return Ok(());
                 }
                 Err(e) => {
+                    if !e.is_retryable() {
+                        warn!("Non-recoverable error for {}: {}", record_name, e);
+                        self.emit_event(EngineEvent::UpdateFailed {
+                            record_name: record_name.to_string(),
+                            error: e.to_string(),
+                            retry_count: attempt,
+                        });
+                        return Err(e);
+                    }
                     warn!(
                         "Update attempt {} failed for {}: {}",
                         attempt, record_name, e

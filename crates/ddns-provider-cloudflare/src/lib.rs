@@ -249,30 +249,15 @@ impl CloudflareProvider {
 
             // Map HTTP status codes to specific errors
             return match status.as_u16() {
-                401 | 403 => {
-                    // Authentication or permission error
-                    Err(Error::provider(
-                        "cloudflare",
-                        format!(
-                            "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
-                            status
-                        ),
-                    ))
-                }
-                404 => {
-                    // Zone not found
-                    Err(Error::not_found(format!("Zone not found: {}", zone_name)))
-                }
-                429 => {
-                    // Rate limit
-                    Err(Error::provider(
-                        "cloudflare",
-                        format!(
-                            "Rate limit exceeded. Please retry later. Status: {}",
-                            status
-                        ),
-                    ))
-                }
+                401 | 403 => Err(Error::auth(format!(
+                    "Invalid API token or insufficient permissions. Status: {}",
+                    status
+                ))),
+                404 => Err(Error::not_found(format!("Zone not found: {}", zone_name))),
+                429 => Err(Error::rate_limited(format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ))),
                 500..=599 => {
                     // Cloudflare server error - transient
                     Err(Error::provider(
@@ -374,24 +359,18 @@ impl CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
-                        status
-                    ),
-                )),
+                401 | 403 => Err(Error::auth(format!(
+                    "Invalid API token or insufficient permissions. Status: {}",
+                    status
+                ))),
                 404 => Err(Error::not_found(format!(
                     "DNS record not found: {} (type: {})",
                     record_name, record_type
                 ))),
-                429 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Rate limit exceeded. Please retry later. Status: {}",
-                        status
-                    ),
-                )),
+                429 => Err(Error::rate_limited(format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ))),
                 500..=599 => Err(Error::provider(
                     "cloudflare",
                     format!(
@@ -517,13 +496,10 @@ impl CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
-                        status
-                    ),
-                )),
+                401 | 403 => Err(Error::auth(format!(
+                    "Invalid API token or insufficient permissions. Status: {}",
+                    status
+                ))),
                 409 => Err(Error::provider(
                     "cloudflare",
                     format!(
@@ -531,13 +507,10 @@ impl CloudflareProvider {
                         status
                     ),
                 )),
-                429 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Rate limit exceeded. Please retry later. Status: {}",
-                        status
-                    ),
-                )),
+                429 => Err(Error::rate_limited(format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ))),
                 500..=599 => Err(Error::provider(
                     "cloudflare",
                     format!(
@@ -683,24 +656,18 @@ impl DnsProvider for CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
-                        status
-                    ),
-                )),
+                401 | 403 => Err(Error::auth(format!(
+                    "Invalid API token or insufficient permissions. Status: {}",
+                    status
+                ))),
                 404 => Err(Error::not_found(format!(
                     "DNS record not found: {}",
                     record_name
                 ))),
-                429 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Rate limit exceeded. Please retry later. Status: {}",
-                        status
-                    ),
-                )),
+                429 => Err(Error::rate_limited(format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ))),
                 500..=599 => Err(Error::provider(
                     "cloudflare",
                     format!(
@@ -729,6 +696,9 @@ impl DnsProvider for CloudflareProvider {
         let current_ip: IpAddr = current_ip_str
             .parse()
             .map_err(|e| Error::provider("cloudflare", format!("Invalid IP in response: {}", e)))?;
+
+        // Preserve the proxied (orange cloud) setting from existing record
+        let proxied = record_json["result"]["proxied"].as_bool().unwrap_or(false);
 
         // Step 4: If IP matches, return Unchanged
         if current_ip == new_ip {
@@ -761,6 +731,7 @@ impl DnsProvider for CloudflareProvider {
                 serde_json::json!({
                     "content": new_ip.to_string(),
                     "type": record_type,
+                    "proxied": proxied,
                 })
             );
             // Return as if update succeeded
@@ -775,6 +746,7 @@ impl DnsProvider for CloudflareProvider {
             "content": new_ip.to_string(),
             "type": record_type,
             "name": record_name,
+            "proxied": proxied,
         });
 
         let put_response = self
@@ -795,13 +767,10 @@ impl DnsProvider for CloudflareProvider {
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
 
             return match status.as_u16() {
-                401 | 403 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Authentication failed: Invalid API token or insufficient permissions. Status: {}",
-                        status
-                    ),
-                )),
+                401 | 403 => Err(Error::auth(format!(
+                    "Invalid API token or insufficient permissions. Status: {}",
+                    status
+                ))),
                 409 => Err(Error::provider(
                     "cloudflare",
                     format!(
@@ -809,13 +778,10 @@ impl DnsProvider for CloudflareProvider {
                         status
                     ),
                 )),
-                429 => Err(Error::provider(
-                    "cloudflare",
-                    format!(
-                        "Rate limit exceeded. Please retry later. Status: {}",
-                        status
-                    ),
-                )),
+                429 => Err(Error::rate_limited(format!(
+                    "Rate limit exceeded. Please retry later. Status: {}",
+                    status
+                ))),
                 500..=599 => Err(Error::provider(
                     "cloudflare",
                     format!(

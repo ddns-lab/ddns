@@ -121,6 +121,25 @@ impl Error {
             message: message.into(),
         }
     }
+
+    /// Returns `true` if this error is potentially recoverable through retry.
+    ///
+    /// Non-retryable errors include authentication failures, invalid input,
+    /// and not-found errors — these will not resolve themselves through retrying.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Authentication(_) => false,
+            Error::InvalidInput(_) => false,
+            Error::NotFound(_) => false,
+            Error::Provider { message, .. } => {
+                let msg = message.to_lowercase();
+                !msg.contains("authentication")
+                    && !msg.contains("invalid api token")
+                    && !msg.contains("insufficient permissions")
+            }
+            _ => true,
+        }
+    }
 }
 
 /// Helper for converting anyhow::Error to our Error type
