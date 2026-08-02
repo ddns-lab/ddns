@@ -255,7 +255,7 @@ impl GoDaddyProvider {
     ) -> Result<Option<(String, IpAddr)>> {
         let url = format!(
             "{}/v1/domains/{}/records/{}/{}",
-            &self.api_base, domain, record_type, name
+            self.api_base, domain, record_type, name
         );
 
         let response = self
@@ -316,7 +316,7 @@ impl GoDaddyProvider {
         record_type: &str,
         ip: IpAddr,
     ) -> Result<()> {
-        let url = format!("{}/v1/domains/{}/records", &self.api_base, domain);
+        let url = format!("{}/v1/domains/{}/records", self.api_base, domain);
 
         let payload = serde_json::json!([{
             "data": ip.to_string(),
@@ -377,7 +377,7 @@ impl GoDaddyProvider {
     ) -> Result<()> {
         let url = format!(
             "{}/v1/domains/{}/records/{}/{}",
-            &self.api_base, domain, record_type, host
+            self.api_base, domain, record_type, host
         );
 
         let payload = serde_json::json!([{
