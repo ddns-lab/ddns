@@ -1,16 +1,23 @@
 [package]
 name = "ddns-provider-namesilo"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "NameSilo DNS provider for the DDNS system"
 
 [dependencies]
-ddns-core = { path = "../ddns-core" }
-async-trait = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+ddns-core = { path = "../ddns-core", version = "0.2" }
+
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+# NameSilo API HTTP client
 reqwest = { version = "0.12", features = ["json"] }
-tracing = "0.1"
-tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 wiremock = "0.6"

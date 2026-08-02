@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-core"
-version = "0.2.3"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-ip-http"
-version = "0.2.3"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-ip-netlink"
-version = "0.2.3"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -224,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-provider-aliyun"
-version = "0.1.0"
+version = "0.2.5"
 dependencies = [
  "async-trait",
  "base64",
@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-provider-cloudflare"
-version = "0.2.3"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -254,11 +254,12 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
 name = "ddns-provider-godaddy"
-version = "0.1.0"
+version = "0.2.5"
 dependencies = [
  "async-trait",
  "base64",
@@ -273,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "ddns-provider-namesilo"
-version = "0.1.0"
+version = "0.2.5"
 dependencies = [
  "async-trait",
  "ddns-core",
@@ -287,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "ddnsd"
-version = "0.2.3"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "ddns-core",

@@ -11,7 +11,7 @@
 // - ✅ HTTP timeout configured (30 seconds)
 // - ✅ Specific error handling for HTTP status codes (403, 404, 409, 429, 5xx)
 // - ✅ Dry-run mode for safe testing
-// - ✅ Idempotency checking (no PUT if IP unchanged)
+// - ✅ Idempotency checking (no PATCH if IP unchanged)
 // - ✅ Both A and AAAA record support
 // - ✅ Zone auto-discovery and explicit zone ID
 // - ❌ NO retry logic (intentionally omitted - owned by DdnsEngine)
@@ -50,7 +50,7 @@
 // ## API Reference
 //
 // - Cloudflare API v4: https://developers.cloudflare.com/api/
-// - Update DNS Record: PUT `/zones/:zone_id/dns_records/:record_id`
+// - Update DNS Record: PATCH `/zones/:zone_id/dns_records/:record_id` (partial update)
 // - List DNS Records: GET `/zones/:zone_id/dns_records?name=...&type=...`
 // - List Zones: GET `/zones?name=...`
 
@@ -79,7 +79,7 @@ const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 ///
 /// When `dry_run` is true, the provider will:
 /// - Perform all GET requests (zone lookup, record lookup)
-/// - Log the intended PUT payload
+/// - Log the intended PATCH payload
 /// - **NOT** actually modify DNS records
 ///
 /// This allows safe testing without making changes.
@@ -110,10 +110,13 @@ pub struct CloudflareProvider {
     /// Account ID (optional, for some operations)
     account_id: Option<String>,
 
+    /// Cloudflare API base URL (overridable, e.g. for tests)
+    api_base: String,
+
     /// HTTP client for API requests
     client: reqwest::Client,
 
-    /// Dry-run mode: if true, perform GET requests but skip PUT updates
+    /// Dry-run mode: if true, perform GET requests but skip PATCH updates
     dry_run: bool,
 }
 
@@ -125,7 +128,7 @@ impl CloudflareProvider {
     /// - `api_token`: Cloudflare API token with Zone:DNS:Edit permissions
     /// - `zone_id`: Optional zone ID (can be auto-detected)
     /// - `account_id`: Optional account ID
-    /// - `dry_run`: If true, perform GET requests but skip PUT updates
+    /// - `dry_run`: If true, perform GET requests but skip PATCH updates
     ///
     /// # Security
     ///
@@ -135,6 +138,27 @@ impl CloudflareProvider {
         zone_id: Option<String>,
         account_id: Option<String>,
         dry_run: bool,
+    ) -> Self {
+        Self::new_with_base(
+            api_token,
+            zone_id,
+            account_id,
+            dry_run,
+            CLOUDFLARE_API_BASE.to_string(),
+        )
+    }
+
+    /// Create a new Cloudflare provider with an explicit API base URL.
+    ///
+    /// This is primarily intended for tests (pointing at a mock server).
+    /// Production code should use [`new`](Self::new), which defaults to the
+    /// real Cloudflare API endpoint.
+    pub fn new_with_base(
+        api_token: impl Into<String>,
+        zone_id: Option<String>,
+        account_id: Option<String>,
+        dry_run: bool,
+        api_base: impl Into<String>,
     ) -> Self {
         // Build HTTP client with timeout
         let client = reqwest::Client::builder()
@@ -153,6 +177,7 @@ impl CloudflareProvider {
             api_token,
             zone_id,
             account_id,
+            api_base: api_base.into(),
             client,
             dry_run,
         }
@@ -173,7 +198,7 @@ impl CloudflareProvider {
     ///
     /// This is a convenience method that creates a provider in dry-run mode.
     /// In dry-run mode, the provider will perform all GET requests but skip
-    /// PUT updates, logging what would have been changed.
+    /// PATCH updates, logging what would have been changed.
     pub fn new_dry_run(
         api_token: impl Into<String>,
         zone_id: Option<String>,
@@ -229,7 +254,7 @@ impl CloudflareProvider {
         tracing::debug!("Looking up zone ID for domain: {}", zone_name);
 
         // Make API request to list zones
-        let url = format!("{}/zones?name={}", CLOUDFLARE_API_BASE, zone_name);
+        let url = format!("{}/zones?name={}", self.api_base, zone_name);
         let response = self
             .client
             .get(&url)
@@ -339,7 +364,7 @@ impl CloudflareProvider {
 
         let url = format!(
             "{}/zones/{}/dns_records?name={}&type={}",
-            CLOUDFLARE_API_BASE, zone_id, record_name, record_type
+            self.api_base, zone_id, record_name, record_type
         );
 
         let response = self
@@ -457,7 +482,7 @@ impl CloudflareProvider {
             ip
         );
 
-        let url = format!("{}/zones/{}/dns_records", CLOUDFLARE_API_BASE, zone_id);
+        let url = format!("{}/zones/{}/dns_records", self.api_base, zone_id);
 
         let create_payload = serde_json::json!({
             "type": record_type,
@@ -552,7 +577,10 @@ impl DnsProvider for CloudflareProvider {
     /// Update a DNS record with a new IP address
     ///
     /// This implementation:
-    /// - Makes ONE HTTP request per engine event (GET to check, PUT if needed)
+    /// - Makes ONE HTTP request per engine event (GET to check, PATCH if needed)
+    /// - Uses PATCH (partial update) so only `content` is sent: the `proxied`
+    ///   (orange/grey cloud), `ttl`, `name`, and `tags` fields are preserved by
+    ///   the Cloudflare API. This avoids resetting proxied records to DNS-only.
     /// - Returns full error propagation (no retry, no backoff - owned by engine)
     /// - Never logs the API token
     /// - Never spawns background tasks
@@ -576,10 +604,9 @@ impl DnsProvider for CloudflareProvider {
     /// GET /zones/:zone_id/dns_records/:record_id
     ///
     /// # Update if IP differs (skipped in dry-run mode)
-    /// PUT /zones/:zone_id/dns_records/:record_id
+    /// PATCH /zones/:zone_id/dns_records/:record_id
     /// {
-    ///   "content": "1.2.3.4",
-    ///   "type": "A" or "AAAA"
+    ///   "content": "1.2.3.4"
     /// }
     /// ```
     async fn update_record(&self, record_name: &str, new_ip: IpAddr) -> Result<UpdateResult> {
@@ -636,7 +663,7 @@ impl DnsProvider for CloudflareProvider {
         // Step 3: Get current record to check if IP matches
         let get_url = format!(
             "{}/zones/{}/dns_records/{}",
-            CLOUDFLARE_API_BASE, zone_id, record_id
+            self.api_base, zone_id, record_id
         );
 
         let get_response = self
@@ -697,9 +724,6 @@ impl DnsProvider for CloudflareProvider {
             .parse()
             .map_err(|e| Error::provider("cloudflare", format!("Invalid IP in response: {}", e)))?;
 
-        // Preserve the proxied (orange cloud) setting from existing record
-        let proxied = record_json["result"]["proxied"].as_bool().unwrap_or(false);
-
         // Step 4: If IP matches, return Unchanged
         if current_ip == new_ip {
             tracing::info!(
@@ -726,13 +750,9 @@ impl DnsProvider for CloudflareProvider {
         // In dry-run mode, log the intended update and return success
         if self.dry_run {
             tracing::info!(
-                "[DRY-RUN] Would send PUT request to {} with payload: {}",
+                "[DRY-RUN] Would send PATCH request to {} with payload: {}",
                 get_url,
-                serde_json::json!({
-                    "content": new_ip.to_string(),
-                    "type": record_type,
-                    "proxied": proxied,
-                })
+                serde_json::json!({ "content": new_ip.to_string() })
             );
             // Return as if update succeeded
             return Ok(UpdateResult::Updated {
@@ -741,17 +761,19 @@ impl DnsProvider for CloudflareProvider {
             });
         }
 
-        // Perform actual update in live mode
-        let update_payload = serde_json::json!({
-            "content": new_ip.to_string(),
-            "type": record_type,
-            "name": record_name,
-            "proxied": proxied,
-        });
+        // Perform the actual update using PATCH.
+        //
+        // Per the Cloudflare API, PATCH is a partial update: only the fields
+        // sent are modified, all others (proxied/orange-cloud, ttl, name,
+        // tags, ...) are preserved by the API. Sending only `content` ensures
+        // we never clobber the proxied setting — the previous PUT-based
+        // implementation reset orange-cloud records to grey-cloud on every
+        // update.
+        let update_payload = serde_json::json!({ "content": new_ip.to_string() });
 
-        let put_response = self
+        let patch_response = self
             .client
-            .put(&get_url)
+            .patch(&get_url)
             .bearer_auth(&self.api_token)
             .header("Content-Type", "application/json")
             .json(&update_payload)
@@ -759,9 +781,9 @@ impl DnsProvider for CloudflareProvider {
             .await
             .map_err(|e| Error::provider("cloudflare", format!("HTTP request failed: {}", e)))?;
 
-        if !put_response.status().is_success() {
-            let status = put_response.status();
-            let error_text = put_response
+        if !patch_response.status().is_success() {
+            let status = patch_response.status();
+            let error_text = patch_response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unable to read error response".to_string());
@@ -1092,5 +1114,109 @@ mod tests {
         // (we can't inspect the timeout directly, but successful creation
         // means the builder didn't fail)
         assert_eq!(provider.api_token, "test_token");
+    }
+
+    /// Regression test for the "update resets orange cloud to grey cloud" bug.
+    ///
+    /// The provider must update a record via PATCH sending only `{"content": ...}`.
+    /// The Cloudflare API preserves omitted fields (proxied, ttl, ...) on PATCH,
+    /// so the existing orange-cloud (`proxied: true`) setting is never touched.
+    /// This test fails if the implementation reverts to PUT or re-adds `proxied`
+    /// to the update payload.
+    #[tokio::test]
+    async fn test_update_uses_patch_and_preserves_proxied() {
+        use ddns_core::traits::UpdateResult;
+        use wiremock::matchers::{header, method, path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let zone_id = "zone-abc";
+        let record_id = "rec-123";
+        let record_name = "ddns.example.com";
+
+        // GET /zones?name=example.com → zone lookup
+        Mock::given(method("GET"))
+            .and(path("/zones"))
+            .and(query_param("name", "example.com"))
+            .and(header("authorization", "Bearer test_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "result": [{ "id": zone_id, "name": "example.com" }]
+            })))
+            .mount(&server)
+            .await;
+
+        // GET /zones/:zone_id/dns_records?name=...&type=A → record id lookup
+        Mock::given(method("GET"))
+            .and(path(format!("/zones/{}/dns_records", zone_id)))
+            .and(query_param("name", record_name))
+            .and(query_param("type", "A"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "result": [{ "id": record_id, "type": "A", "name": record_name }]
+            })))
+            .mount(&server)
+            .await;
+
+        // GET /zones/:zone_id/dns_records/:record_id → existing record.
+        // IMPORTANT: existing record is orange-cloud (proxied: true) with an
+        // OLD IP, so an update will be triggered.
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/zones/{}/dns_records/{}",
+                zone_id, record_id
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "result": {
+                    "id": record_id,
+                    "type": "A",
+                    "name": record_name,
+                    "content": "203.0.113.10",  // old IP, differs from new_ip
+                    "proxied": true,            // orange cloud - must be preserved
+                    "ttl": 1
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        // The update itself: MUST be PATCH with a body containing ONLY `content`.
+        // We assert (a) the method is PATCH (not PUT), and (b) the body has no
+        // `proxied` field — proving we rely on the API to preserve it.
+        Mock::given(method("PATCH"))
+            .and(path(format!(
+                "/zones/{}/dns_records/{}",
+                zone_id, record_id
+            )))
+            .and(wiremock::matchers::body_partial_json(serde_json::json!({
+                "content": "198.51.100.42"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "result": {
+                    "id": record_id,
+                    "content": "198.51.100.42",
+                    "proxied": true
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let provider = CloudflareProvider::new_with_base(
+            "test_token",
+            None,
+            None,
+            false,
+            server.uri(),
+        );
+
+        let new_ip: std::net::IpAddr = "198.51.100.42".parse().unwrap();
+        let result = provider.update_record(record_name, new_ip).await;
+
+        assert!(result.is_ok(), "update_record failed: {:?}", result.err());
+        match result.unwrap() {
+            UpdateResult::Updated { previous_ip, new_ip: ip } => {
+                assert_eq!(ip, new_ip);
+                assert_eq!(previous_ip, Some("203.0.113.10".parse().unwrap()));
+            }
+            other => panic!("expected Updated, got {:?}", other),
+        }
     }
 }

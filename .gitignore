@@ -35,6 +35,8 @@ node_modules/
 # IDE
 .idea/
 .vscode/
+.opencode/
 *.swp
 *.swo
 dist/
+.zcode/
