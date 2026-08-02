@@ -1199,20 +1199,18 @@ mod tests {
             .mount(&server)
             .await;
 
-        let provider = CloudflareProvider::new_with_base(
-            "test_token",
-            None,
-            None,
-            false,
-            server.uri(),
-        );
+        let provider =
+            CloudflareProvider::new_with_base("test_token", None, None, false, server.uri());
 
         let new_ip: std::net::IpAddr = "198.51.100.42".parse().unwrap();
         let result = provider.update_record(record_name, new_ip).await;
 
         assert!(result.is_ok(), "update_record failed: {:?}", result.err());
         match result.unwrap() {
-            UpdateResult::Updated { previous_ip, new_ip: ip } => {
+            UpdateResult::Updated {
+                previous_ip,
+                new_ip: ip,
+            } => {
                 assert_eq!(ip, new_ip);
                 assert_eq!(previous_ip, Some("203.0.113.10".parse().unwrap()));
             }

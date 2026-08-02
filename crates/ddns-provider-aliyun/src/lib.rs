@@ -548,10 +548,7 @@ impl AliyunProvider {
                 )),
                 409 => Err(Error::provider(
                     "aliyun",
-                    format!(
-                        "Conflict: Record already exists. Status: {}",
-                        status
-                    ),
+                    format!("Conflict: Record already exists. Status: {}", status),
                 )),
                 429 => Err(Error::provider(
                     "aliyun",
