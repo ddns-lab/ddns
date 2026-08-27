@@ -82,7 +82,7 @@
 use anyhow::Result;
 use std::env;
 use std::process::ExitCode;
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 use ddns_core::config::{IpVersion, RecordType};
@@ -172,6 +172,8 @@ fn print_help() {
     println!("  Engine:");
     println!("    DDNS_MAX_RETRIES          Max retry attempts [default: 3]");
     println!("    DDNS_RETRY_DELAY_SECS     Delay between retries [default: 5]");
+    println!("    DDNS_STARTUP_DELAY_SECS   Initial delay before monitoring starts [default: 0]");
+    println!("    DDNS_MIN_UPDATE_INTERVAL_SECS Minimum interval between updates [default: 60]");
     println!("    DDNS_LOG_LEVEL            Log level (trace, debug, info, warn, error)");
     println!();
     println!("EXAMPLES:");
@@ -741,29 +743,69 @@ async fn run_daemon(config: Config) -> Result<()> {
     let (engine, mut event_rx) = DdnsEngine::new(ip_source, provider, state_store, ddns_config)?;
 
     // Spawn event listener (optional, for logging)
-    let event_listener = tokio::spawn(async move {
+    let mut event_listener = tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {
             info!("[Engine Event] {:?}", event);
         }
     });
 
     info!("Starting DDNS engine");
-    let engine_handle = tokio::spawn(async move { engine.run().await });
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let mut engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
 
     info!("Daemon initialized successfully");
     info!("Ready to monitor IP changes");
 
-    // Wait for shutdown signal (runs indefinitely until SIGTERM/SIGINT)
-    let signal = wait_for_shutdown().await?;
+    let engine_result = tokio::select! {
+        engine_result = &mut engine_handle => {
+            match engine_result {
+                Ok(inner) => inner.map_err(|error| anyhow::anyhow!("{}", error)),
+                Err(e) => Err(anyhow::anyhow!("Engine task panicked: {}", e)),
+            }
+        }
 
-    info!("Received shutdown signal: {}", signal);
-    info!("Shutting down daemon");
+        signal = wait_for_shutdown() => {
+            let signal = signal?;
 
-    // Drop engine handle to trigger graceful shutdown
-    drop(engine_handle);
+            info!("Received shutdown signal: {}", signal);
+            info!("Shutting down daemon");
 
-    // Wait for event listener to finish
-    drop(event_listener);
+            if shutdown_tx.send(()).is_err() {
+                warn!("Engine task already exited before shutdown signal");
+            }
+
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(30),
+                &mut engine_handle,
+            )
+            .await
+            {
+                Ok(Ok(Ok(()))) => Ok(()),
+                Ok(Ok(Err(e))) => Err(anyhow::anyhow!("{}", e)),
+                Ok(Err(e)) => {
+                    Err(anyhow::anyhow!("Engine task panicked during shutdown: {}", e))
+                }
+                Err(_) => {
+                    warn!("Engine shutdown exceeded 30 seconds; forcing termination");
+                    engine_handle.abort();
+                    let _ = engine_handle.await;
+                    Err(anyhow::anyhow!("Graceful shutdown timeout"))
+                }
+            }
+        }
+    };
+
+    // Ensure event listener exits with the engine task.
+    if let Err(_elapsed) =
+        tokio::time::timeout(tokio::time::Duration::from_secs(2), &mut event_listener).await
+    {
+        warn!("Event listener did not stop within 2 seconds; aborting");
+        event_listener.abort();
+        let _ = event_listener.await;
+    }
+
+    engine_result?;
 
     Ok(())
 }

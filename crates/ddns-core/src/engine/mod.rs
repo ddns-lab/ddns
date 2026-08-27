@@ -37,9 +37,18 @@
 use crate::config::{DdnsConfig, RecordConfig};
 use crate::error::{Error, Result};
 use crate::traits::{DnsProvider, IpChangeEvent, IpSource, StateStore};
+use std::collections::HashMap;
+use std::net::IpAddr;
 use tokio::sync::mpsc;
+use tokio::time::{Duration, Instant, sleep_until, timeout};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
+
+#[derive(Clone, Copy, Debug)]
+struct PendingRateLimitUpdate {
+    new_ip: IpAddr,
+    due_at: Instant,
+}
 
 /// Events emitted by the DdnsEngine
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,14 +202,18 @@ impl DdnsEngine {
         shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
         skip_initial_updates: bool,
     ) -> Result<()> {
+        let mut pending_updates: HashMap<String, PendingRateLimitUpdate> = HashMap::new();
+
         self.emit_event(EngineEvent::Started {
             records_count: self.records.len(),
         });
 
-        // Trigger initial DNS updates for all configured records (unless testing)
+        // Trigger initial DNS updates for all configured records (unless testing).
+        // Rate-limited initial updates are deferred into `pending_updates` so the
+        // timer below still delivers them once the interval elapses.
         if !skip_initial_updates {
             info!("Triggering initial DNS updates");
-            if let Err(e) = self.trigger_initial_updates().await {
+            if let Err(e) = self.trigger_initial_updates(&mut pending_updates).await {
                 error!("Failed to handle initial DNS updates: {}", e);
             }
         }
@@ -217,16 +230,40 @@ impl DdnsEngine {
         // Watch for IP changes
         let mut ip_stream = self.ip_source.watch();
 
+        // Arm the deferral timer after startup updates so deferred initial
+        // updates are also delivered.
+        let mut pending_timer = Self::next_pending_timer(&pending_updates);
+
         // Main event loop
         if let Some(mut rx) = shutdown_rx {
             // Test mode: wait for provided shutdown signal
             loop {
                 tokio::select! {
                     // Handle IP changes
-                    Some(event) = ip_stream.next() => {
-                        if let Err(e) = self.handle_ip_change(event).await {
-                            error!("Failed to handle IP change: {}", e);
+                    event = ip_stream.next() => {
+                        match event {
+                            Some(event) => {
+                                if let Err(e) = self.handle_ip_change(event, &mut pending_updates).await {
+                                    error!("Failed to handle IP change: {}", e);
+                                }
+                                pending_timer = Self::next_pending_timer(&pending_updates);
+                            }
+                            None => {
+                                info!("IP stream ended, shutting down engine");
+                                self.emit_event(EngineEvent::Stopped {
+                                    reason: "IpSource stream ended".to_string(),
+                                });
+                                break;
+                            }
                         }
+                    }
+
+                    // Process pending rate-limited updates once due
+                    _ = Self::wait_for_pending_timer(pending_timer.take()) => {
+                        if let Err(e) = self.process_pending_updates(&mut pending_updates).await {
+                            error!("Failed to process pending updates: {}", e);
+                        }
+                        pending_timer = Self::next_pending_timer(&pending_updates);
                     }
 
                     // Handle test shutdown signal
@@ -253,11 +290,31 @@ impl DdnsEngine {
                 loop {
                     tokio::select! {
                         // Handle IP changes
-                        Some(event) = ip_stream.next() => {
-                            if let Err(e) = self.handle_ip_change(event).await {
-                                error!("Failed to handle IP change: {}", e);
-                                // Continue running despite errors
+                        event = ip_stream.next() => {
+                            match event {
+                                Some(event) => {
+                                    if let Err(e) = self.handle_ip_change(event, &mut pending_updates).await {
+                                        error!("Failed to handle IP change: {}", e);
+                                        // Continue running despite errors
+                                    }
+                                    pending_timer = Self::next_pending_timer(&pending_updates);
+                                }
+                                None => {
+                                    info!("IP stream ended, shutting down engine");
+                                    self.emit_event(EngineEvent::Stopped {
+                                        reason: "IpSource stream ended".to_string(),
+                                    });
+                                    break;
+                                }
                             }
+                        }
+
+                        // Process pending rate-limited updates once due
+                        _ = Self::wait_for_pending_timer(pending_timer.take()) => {
+                            if let Err(e) = self.process_pending_updates(&mut pending_updates).await {
+                                error!("Failed to process pending updates: {}", e);
+                            }
+                            pending_timer = Self::next_pending_timer(&pending_updates);
                         }
 
                         // Handle SIGTERM (systemd stop)
@@ -286,11 +343,31 @@ impl DdnsEngine {
                 loop {
                     tokio::select! {
                         // Handle IP changes
-                        Some(event) = ip_stream.next() => {
-                            if let Err(e) = self.handle_ip_change(event).await {
-                                error!("Failed to handle IP change: {}", e);
-                                // Continue running despite errors
+                        event = ip_stream.next() => {
+                            match event {
+                                Some(event) => {
+                                    if let Err(e) = self.handle_ip_change(event, &mut pending_updates).await {
+                                        error!("Failed to handle IP change: {}", e);
+                                        // Continue running despite errors
+                                    }
+                                    pending_timer = Self::next_pending_timer(&pending_updates);
+                                }
+                                None => {
+                                    info!("IP stream ended, shutting down engine");
+                                    self.emit_event(EngineEvent::Stopped {
+                                        reason: "IpSource stream ended".to_string(),
+                                    });
+                                    break;
+                                }
                             }
+                        }
+
+                        // Process pending rate-limited updates once due
+                        _ = Self::wait_for_pending_timer(pending_timer.take()) => {
+                            if let Err(e) = self.process_pending_updates(&mut pending_updates).await {
+                                error!("Failed to process pending updates: {}", e);
+                            }
+                            pending_timer = Self::next_pending_timer(&pending_updates);
                         }
 
                         // Handle shutdown signal (non-Unix)
@@ -306,9 +383,17 @@ impl DdnsEngine {
             }
         }
 
-        // Flush state before exiting
-        self.state_store.flush().await?;
-        info!("State flushed, engine stopped");
+        // Flush state before exiting.
+        // A timeout protects against blocked I/O during shutdown.
+        match timeout(Duration::from_secs(5), self.state_store.flush()).await {
+            Ok(Ok(())) => info!("State flushed, engine stopped"),
+            Ok(Err(error)) => {
+                return Err(error);
+            }
+            Err(_) => {
+                warn!("State flush timed out after 5s, continuing shutdown");
+            }
+        }
 
         Ok(())
     }
@@ -325,7 +410,10 @@ impl DdnsEngine {
     ///    - Check StateStore for last known IP
     ///    - If different or missing, call provider to update/create record
     ///    - If same, skip update (idempotency)
-    async fn trigger_initial_updates(&self) -> Result<()> {
+    async fn trigger_initial_updates(
+        &self,
+        pending_updates: &mut HashMap<String, PendingRateLimitUpdate>,
+    ) -> Result<()> {
         use crate::traits::IpChangeEvent;
 
         // Get current IP (this may be v4 or v6 depending on ip_source configuration)
@@ -342,11 +430,12 @@ impl DdnsEngine {
         info!("Current IP: {}", current_ip);
 
         // Create an initial event with previous_ip=None
-        // This forces update_record_with_retry to check and update as needed
+        // This forces update_record to check and update as needed
         let initial_event = IpChangeEvent::new(current_ip, None);
 
         // Process the event for all matching records
-        self.handle_ip_change(initial_event).await?;
+        self.handle_ip_change(initial_event, pending_updates)
+            .await?;
 
         Ok(())
     }
@@ -356,7 +445,11 @@ impl DdnsEngine {
     /// # Parameters
     ///
     /// - `event`: The IP change event
-    async fn handle_ip_change(&self, event: IpChangeEvent) -> Result<()> {
+    async fn handle_ip_change(
+        &self,
+        event: IpChangeEvent,
+        pending_updates: &mut HashMap<String, PendingRateLimitUpdate>,
+    ) -> Result<()> {
         debug!(
             "IP change detected: {} -> {:?} (version: {:?})",
             event
@@ -410,11 +503,14 @@ impl DdnsEngine {
 
             // Update the record
             match self
-                .update_record_with_retry(&record.name, event.new_ip)
+                .update_record(&record.name, event.new_ip, pending_updates)
                 .await
             {
                 Ok(_) => {
-                    debug!("Successfully updated record {}", record.name);
+                    debug!(
+                        "Finished processing record {} (updated or deferred)",
+                        record.name
+                    );
                 }
                 Err(e) => {
                     error!("Failed to update record {}: {}", record.name, e);
@@ -424,6 +520,147 @@ impl DdnsEngine {
         }
 
         Ok(())
+    }
+
+    /// Determine whether this update should be deferred to satisfy
+    /// minimum interval constraints.
+    async fn should_defer_update(
+        &self,
+        record_name: &str,
+        new_ip: IpAddr,
+        pending_updates: &mut HashMap<String, PendingRateLimitUpdate>,
+    ) -> Result<bool> {
+        // Idempotency: if IP has not changed, skip immediately.
+        if let Some(last_ip) = self.state_store.get_last_ip(record_name).await?
+            && last_ip == new_ip
+        {
+            debug!(
+                "Record {} already has IP {}, skipping update",
+                record_name, new_ip
+            );
+            self.emit_event(EngineEvent::UpdateSkipped {
+                record_name: record_name.to_string(),
+                current_ip: new_ip,
+            });
+            pending_updates.remove(record_name);
+            return Ok(true);
+        }
+
+        // No rate limiting configured.
+        if self.min_update_interval_secs == 0 {
+            pending_updates.remove(record_name);
+            return Ok(false);
+        }
+
+        let Some(record) = self.state_store.get_record(record_name).await? else {
+            // Without a state record we do not have a last update timestamp,
+            // so we update immediately and let persistence define baseline for next update.
+            pending_updates.remove(record_name);
+            return Ok(false);
+        };
+
+        let elapsed = chrono::Utc::now().signed_duration_since(record.last_updated);
+
+        // Defensive handling for clock skew or invalid duration conversions.
+        let elapsed = if elapsed <= chrono::Duration::zero() {
+            Duration::ZERO
+        } else {
+            elapsed.to_std().unwrap_or(Duration::ZERO)
+        };
+
+        let min_interval = Duration::from_secs(self.min_update_interval_secs);
+        if elapsed >= min_interval {
+            pending_updates.remove(record_name);
+            return Ok(false);
+        }
+
+        let due_in = min_interval - elapsed;
+        let due_at = Instant::now() + due_in;
+
+        pending_updates.insert(
+            record_name.to_string(),
+            PendingRateLimitUpdate { new_ip, due_at },
+        );
+
+        let remaining = due_in.as_secs();
+        debug!(
+            "Record {} update deferred by rate limit; latest IP {}, {}s remaining",
+            record_name, new_ip, remaining
+        );
+
+        Ok(true)
+    }
+
+    /// Build the next timer that fires when the earliest pending update is due.
+    /// A deadline in the past completes immediately.
+    fn next_pending_timer(
+        pending_updates: &HashMap<String, PendingRateLimitUpdate>,
+    ) -> Option<tokio::time::Sleep> {
+        pending_updates
+            .values()
+            .map(|pending| pending.due_at)
+            .min()
+            .map(sleep_until)
+    }
+
+    /// Wait for the next pending timer or park indefinitely if none exist.
+    async fn wait_for_pending_timer(timer: Option<tokio::time::Sleep>) {
+        match timer {
+            Some(timer) => timer.await,
+            None => std::future::pending::<()>().await,
+        }
+    }
+
+    /// Process all due pending updates and clear them.
+    async fn process_pending_updates(
+        &self,
+        pending_updates: &mut HashMap<String, PendingRateLimitUpdate>,
+    ) -> Result<()> {
+        if pending_updates.is_empty() {
+            return Ok(());
+        }
+
+        let now = Instant::now();
+        let due_updates: Vec<(String, IpAddr)> = pending_updates
+            .iter()
+            .filter_map(|(name, pending)| {
+                if pending.due_at <= now {
+                    Some((name.clone(), pending.new_ip))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (record_name, new_ip) in due_updates {
+            pending_updates.remove(&record_name);
+
+            if let Err(e) = self.update_record_with_retry(&record_name, new_ip).await {
+                error!(
+                    "Failed to process pending update for {}: {}",
+                    record_name, e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle update flow for a record with idempotency and rate limiting.
+    async fn update_record(
+        &self,
+        record_name: &str,
+        new_ip: std::net::IpAddr,
+        pending_updates: &mut HashMap<String, PendingRateLimitUpdate>,
+    ) -> Result<()> {
+        if self
+            .should_defer_update(record_name, new_ip, pending_updates)
+            .await?
+        {
+            return Ok(());
+        }
+
+        self.update_record_with_retry(record_name, new_ip).await
     }
 
     /// Update a DNS record with retry logic
@@ -437,48 +674,6 @@ impl DdnsEngine {
         record_name: &str,
         new_ip: std::net::IpAddr,
     ) -> Result<()> {
-        // Check if update is needed (idempotency)
-        // Note: Using nested if statements instead of let-chains for better Docker compatibility
-        #[allow(clippy::collapsible_if)]
-        if let Some(last_ip) = self.state_store.get_last_ip(record_name).await? {
-            if last_ip == new_ip {
-                debug!(
-                    "Record {} already has IP {}, skipping update",
-                    record_name, new_ip
-                );
-                self.emit_event(EngineEvent::UpdateSkipped {
-                    record_name: record_name.to_string(),
-                    current_ip: new_ip,
-                });
-                return Ok(());
-            }
-        }
-
-        // Rate limiting: Check minimum interval between updates
-        // Note: Using nested if statements instead of let-chains for better Docker compatibility
-        #[allow(clippy::collapsible_if)]
-        if self.min_update_interval_secs > 0 {
-            if let Some(record) = self.state_store.get_record(record_name).await? {
-                let now = chrono::Utc::now();
-                let elapsed = now.signed_duration_since(record.last_updated);
-                let min_interval = chrono::Duration::seconds(self.min_update_interval_secs as i64);
-
-                if elapsed < min_interval {
-                    debug!(
-                        "Record {} updated too recently ({}s ago), skipping update. Minimum interval: {}s",
-                        record_name,
-                        elapsed.num_seconds(),
-                        self.min_update_interval_secs
-                    );
-                    self.emit_event(EngineEvent::UpdateSkipped {
-                        record_name: record_name.to_string(),
-                        current_ip: new_ip,
-                    });
-                    return Ok(());
-                }
-            }
-        }
-
         // Emit event
         self.emit_event(EngineEvent::UpdateStarted {
             record_name: record_name.to_string(),
@@ -588,19 +783,15 @@ impl DdnsEngine {
         }
     }
 
-    /// Test-only helper to run the engine with a controlled shutdown signal
+    /// Run the engine with an optional programmatic shutdown signal.
     ///
-    /// # Visibility
+    /// When `shutdown_rx` is `Some`, the engine stops when that signal fires;
+    /// this is how the daemon drives shutdown, since it owns OS signal handling
+    /// (SIGTERM/SIGINT) and enforces an outer graceful-shutdown timeout.
+    /// When `None`, the engine installs its own signal handlers instead
+    /// (equivalent to [`DdnsEngine::run()`]).
     ///
-    /// This is `pub` for testing purposes only.
-    ///
-    /// Run the engine with programmatic shutdown (for testing)
-    ///
-    /// **TESTING ONLY**: Architecture contract tests require controlled shutdown.
-    /// Production daemon code should use `run()` instead, which manages shutdown
-    /// via OS signals (SIGTERM/SIGINT) rather than programmatic channels.
-    ///
-    /// External providers and IP sources MUST NOT call this method.
+    /// Contract tests also use this for deterministic, controlled shutdown.
     pub async fn run_with_shutdown(
         &self,
         shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,

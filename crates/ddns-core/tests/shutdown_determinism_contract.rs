@@ -26,7 +26,8 @@ async fn shutdown_signal_terminates_engine() {
     // This is the most basic shutdown test:
     // Verify that the engine responds to shutdown signal
 
-    let ip_source = Box::new(IdleIpSource::new(IpAddr::from([192, 168, 1, 1])));
+    let (ip_source, _ip_event_tx) = ControlledIpSource::new(IpAddr::from([192, 168, 1, 1]));
+    let ip_source = Box::new(ip_source);
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());
     let config = minimal_config("example.com");
@@ -66,7 +67,8 @@ async fn shutdown_flushes_state() {
 
     use std::sync::Arc;
 
-    let ip_source = Box::new(IdleIpSource::new(IpAddr::from([192, 168, 1, 1])));
+    let (ip_source, _ip_event_tx) = ControlledIpSource::new(IpAddr::from([192, 168, 1, 1]));
+    let ip_source = Box::new(ip_source);
     let provider = Box::new(MockDnsProvider::new("test"));
 
     let state_store = Box::new(MockStateStore::new());
@@ -207,7 +209,22 @@ async fn no_future_leaks_after_shutdown() {
 
     struct CountingDropSource {
         current_ip: IpAddr,
+        _stream_tx: tokio::sync::mpsc::UnboundedSender<IpChangeEvent>,
         stream_task_count: Arc<AtomicUsize>,
+        stream_rx:
+            Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<IpChangeEvent>>>>,
+    }
+
+    impl CountingDropSource {
+        fn new(current_ip: IpAddr) -> Self {
+            let (_stream_tx, rx) = tokio::sync::mpsc::unbounded_channel::<IpChangeEvent>();
+            Self {
+                current_ip,
+                _stream_tx,
+                stream_task_count: Arc::new(AtomicUsize::new(0)),
+                stream_rx: Arc::new(std::sync::Mutex::new(Some(rx))),
+            }
+        }
     }
 
     impl Drop for CountingDropSource {
@@ -229,15 +246,18 @@ async fn no_future_leaks_after_shutdown() {
         {
             self.stream_task_count.fetch_add(1, Ordering::SeqCst);
 
-            let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            let rx = self
+                .stream_rx
+                .lock()
+                .unwrap()
+                .take()
+                .expect("watch() can only be called once");
+
             Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
         }
     }
 
-    let ip_source = Box::new(CountingDropSource {
-        current_ip: IpAddr::from([192, 168, 1, 1]),
-        stream_task_count: stream_task_count.clone(),
-    });
+    let ip_source = Box::new(CountingDropSource::new(IpAddr::from([192, 168, 1, 1])));
 
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());
@@ -254,7 +274,13 @@ async fn no_future_leaks_after_shutdown() {
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
     shutdown_tx.send(()).unwrap();
-    let _ = engine_handle.await;
+    let engine_result = engine_handle.await.unwrap();
+
+    assert!(
+        engine_result.is_ok(),
+        "Engine should shut down cleanly: {:?}",
+        engine_result
+    );
 
     // After shutdown, stream task count should return to 0
     tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -271,7 +297,8 @@ async fn no_future_leaks_after_shutdown() {
 async fn multiple_shutdown_calls_are_safe() {
     // Verify that multiple shutdown signals don't cause issues
 
-    let ip_source = Box::new(IdleIpSource::new(IpAddr::from([192, 168, 1, 1])));
+    let (ip_source, _ip_event_tx) = ControlledIpSource::new(IpAddr::from([192, 168, 1, 1]));
+    let ip_source = Box::new(ip_source);
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());
     let config = minimal_config("example.com");
@@ -294,10 +321,18 @@ async fn multiple_shutdown_calls_are_safe() {
     let _ = shutdown_tx2.send(());
 
     // Engine should still terminate successfully
-    let result = tokio::time::timeout(tokio::time::Duration::from_secs(5), engine_handle).await;
+    let engine_result =
+        tokio::time::timeout(tokio::time::Duration::from_secs(5), engine_handle).await;
 
     assert!(
-        result.is_ok(),
+        engine_result.is_ok(),
         "Multiple shutdown signals should not cause issues"
+    );
+
+    let result = engine_result.unwrap().unwrap();
+    assert!(
+        result.is_ok(),
+        "Engine should shut down cleanly after multiple shutdown signals: {:?}",
+        result
     );
 }

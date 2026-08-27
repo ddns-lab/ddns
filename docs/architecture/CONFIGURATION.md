@@ -64,6 +64,7 @@ These variables have **defaults** if not set:
 |----------|-------------|---------|--------------|
 | `DDNS_MAX_RETRIES` | Maximum retry attempts | `3` | `0` (no retries) to `10` |
 | `DDNS_RETRY_DELAY_SECS` | Delay between retries (seconds) | `5` | `0` (immediate) to `3600` |
+| `DDNS_MIN_UPDATE_INTERVAL_SECS` | Minimum update interval (seconds) | `60` | `0` (disabled) to `86400` |
 | `DDNS_STARTUP_DELAY_SECS` | Initial startup delay (seconds) | `0` | `0` to `60` |
 
 #### Logging Configuration
@@ -86,6 +87,7 @@ These variables have **defaults** if not set:
 | `DDNS_STATE_STORE_PATH` | Required if `DDNS_STATE_STORE_TYPE=file` | ⚠️ See below |
 | `DDNS_MAX_RETRIES` | Uses `3` | ✅ Yes |
 | `DDNS_RETRY_DELAY_SECS` | Uses `5` | ✅ Yes |
+| `DDNS_MIN_UPDATE_INTERVAL_SECS` | Uses `60` | ✅ Yes |
 | `DDNS_LOG_LEVEL` | Uses `info` | ✅ Yes |
 
 ### Platform-Specific Defaults

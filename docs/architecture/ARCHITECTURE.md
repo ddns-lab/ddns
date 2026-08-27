@@ -509,8 +509,8 @@ Under any load scenario, memory usage is bounded by:
 
 **System response**:
 1. First change triggers DNS update
-2. Next 59 seconds of changes are **rate-limited** (skipped)
-3. After 60 seconds, next change triggers DNS update
+2. Subsequent changes are **rate-limited** and deferred, with only the latest IP kept in queue
+3. The deferred update is sent when the interval elapses
 4. **Result**: Maximum 1 DNS update per minute per record
 
 #### Scenario 2: DNS Provider Slow Response
@@ -530,7 +530,7 @@ Under any load scenario, memory usage is bounded by:
 
 **System response**:
 1. First change triggers DNS update
-2. Subsequent changes rate-limited (60-second interval)
+2. Subsequent changes are deferred within the rate interval and collapsed to the latest IP
 3. Channel may fill briefly but events are dropped
 4. **Result**: Steady state of 1 DNS update per minute per record
 
@@ -575,8 +575,8 @@ event_channel_capacity: 500    // Moderate buffer
 Under load, watch for these log messages:
 
 **Normal**:
-- `"Record {name} updated too recently (Xs ago), skipping update"`
-- Indicates rate limiting is working
+- `"Record {name} update deferred by rate limit; latest IP ..."`
+- Indicates rate limiting and event coalescing is working
 
 **Warning**:
 - `"Event channel full, dropping event"`
@@ -693,7 +693,7 @@ The system guarantees **deterministic behavior** under all conditions:
 | **Multiple IP changes** | Processed sequentially, order preserved | ✅ Yes |
 | **Provider slow response** | Blocks until complete, then next record | ✅ Yes |
 | **Record update fails** | Logged, next record still updated | ✅ Yes |
-| **Rate limit hit** | Update skipped, next record processed | ✅ Yes |
+| **Rate limit hit** | Update deferred and coalesced, next record processed | ✅ Yes |
 
 **No Implicit Fan-Out**:
 - One IP change → sequential record updates (not parallel)
@@ -783,8 +783,8 @@ Time 0s:   IP changes to 1.2.3.4
            www.example.com → Updated ✓ (last update: 0s)
 
 Time 5s:  IP changes to 1.2.3.5
-           example.com → Skipped (5s ago < 60s interval)
-           www.example.com → Skipped (5s ago < 60s interval)
+           example.com → Deferred (latest IP kept in timer queue, previous update pending)
+           www.example.com → Deferred (latest IP kept in timer queue, previous update pending)
 
 Time 65s: IP changes to 1.2.3.6
            example.com → Updated ✓ (65s ago > 60s interval)
@@ -878,4 +878,3 @@ See [VERSIONING.md](VERSIONING.md) for:
 - Release process
 - Deprecation policy
 - FAQ
-

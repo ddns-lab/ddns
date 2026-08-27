@@ -17,12 +17,13 @@ mod common;
 use common::*;
 use ddns_core::DdnsEngine;
 use ddns_core::traits::IpSource;
-use tokio_stream::StreamExt;
 
 #[tokio::test]
 async fn idle_no_dns_updates_without_ip_events() {
     // Arrange: Create components that track calls
-    let ip_source = Box::new(IdleIpSource::new(std::net::IpAddr::from([192, 168, 1, 1])));
+    let (ip_source, _ip_event_tx) =
+        ControlledIpSource::new(std::net::IpAddr::from([192, 168, 1, 1]));
+    let ip_source = Box::new(ip_source);
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());
     let config = minimal_config("example.com");
@@ -30,10 +31,6 @@ async fn idle_no_dns_updates_without_ip_events() {
     // Act: Create engine
     let (engine, _event_rx) = DdnsEngine::new(ip_source, provider, state_store, config)
         .expect("engine construction succeeds");
-
-    // Get a reference to the provider before it's moved
-    // Note: We need to extract it from the engine or use a shared reference
-    // For now, we'll just run the engine briefly and check the event stream
 
     // Create a shutdown trigger
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -52,7 +49,7 @@ async fn idle_no_dns_updates_without_ip_events() {
     let result = engine_handle.await.expect("engine task completes");
     assert!(result.is_ok(), "engine shuts down cleanly");
 
-    // Assert: Check event stream for any UpdateStarted events
+    // Assert: no update events were emitted while idle
     // (In a real implementation, we'd track events via the event_rx)
 }
 
@@ -77,6 +74,29 @@ async fn idle_no_background_polling() {
         current_ip: std::net::IpAddr,
         current_calls: Arc<AtomicUsize>,
         watch_calls: Arc<AtomicUsize>,
+        stream_rx: Arc<
+            std::sync::Mutex<
+                Option<tokio::sync::mpsc::UnboundedReceiver<ddns_core::traits::IpChangeEvent>>,
+            >,
+        >,
+        _stream_tx: tokio::sync::mpsc::UnboundedSender<ddns_core::traits::IpChangeEvent>,
+    }
+
+    impl TrackingIdleSource {
+        fn new(
+            current_ip: std::net::IpAddr,
+            current_calls: Arc<AtomicUsize>,
+            watch_calls: Arc<AtomicUsize>,
+        ) -> Self {
+            let (stream_tx, stream_rx) = tokio::sync::mpsc::unbounded_channel();
+            Self {
+                current_ip,
+                current_calls,
+                watch_calls,
+                stream_rx: Arc::new(std::sync::Mutex::new(Some(stream_rx))),
+                _stream_tx: stream_tx,
+            }
+        }
     }
 
     #[async_trait::async_trait]
@@ -92,16 +112,23 @@ async fn idle_no_background_polling() {
             Box<dyn tokio_stream::Stream<Item = ddns_core::traits::IpChangeEvent> + Send + 'static>,
         > {
             self.watch_calls.fetch_add(1, Ordering::SeqCst);
-            let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+            let rx = self
+                .stream_rx
+                .lock()
+                .unwrap()
+                .take()
+                .expect("watch() can only be called once");
+
             Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
         }
     }
 
-    let ip_source = Box::new(TrackingIdleSource {
-        current_ip: std::net::IpAddr::from([192, 168, 1, 1]),
-        current_calls: current_calls.clone(),
-        watch_calls: watch_calls.clone(),
-    });
+    let ip_source = Box::new(TrackingIdleSource::new(
+        std::net::IpAddr::from([192, 168, 1, 1]),
+        current_calls.clone(),
+        watch_calls.clone(),
+    ));
 
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());
@@ -154,6 +181,24 @@ async fn idle_no_periodic_wakeups() {
     struct CountingIdleSource {
         current_ip: std::net::IpAddr,
         poll_count: Arc<AtomicUsize>,
+        stream_rx: Arc<
+            std::sync::Mutex<
+                Option<tokio::sync::mpsc::UnboundedReceiver<ddns_core::traits::IpChangeEvent>>,
+            >,
+        >,
+        _stream_tx: tokio::sync::mpsc::UnboundedSender<ddns_core::traits::IpChangeEvent>,
+    }
+
+    impl CountingIdleSource {
+        fn new(current_ip: std::net::IpAddr, poll_count: Arc<AtomicUsize>) -> Self {
+            let (stream_tx, stream_rx) = tokio::sync::mpsc::unbounded_channel();
+            Self {
+                current_ip,
+                poll_count,
+                stream_rx: Arc::new(std::sync::Mutex::new(Some(stream_rx))),
+                _stream_tx: stream_tx,
+            }
+        }
     }
 
     #[async_trait::async_trait]
@@ -169,25 +214,21 @@ async fn idle_no_periodic_wakeups() {
         > {
             self.poll_count.fetch_add(1, Ordering::SeqCst);
 
-            // Create a stream that never yields
-            let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            let rx = self
+                .stream_rx
+                .lock()
+                .unwrap()
+                .take()
+                .expect("watch() can only be called once");
 
-            // Wrap in a stream that increments counter on each poll
-            let poll_count = self.poll_count.clone();
-            let stream =
-                tokio_stream::wrappers::UnboundedReceiverStream::new(rx).map(move |event| {
-                    poll_count.fetch_add(1, Ordering::SeqCst);
-                    event
-                });
-
-            Box::pin(stream)
+            Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
         }
     }
 
-    let ip_source = Box::new(CountingIdleSource {
-        current_ip: std::net::IpAddr::from([192, 168, 1, 1]),
-        poll_count: poll_count.clone(),
-    });
+    let ip_source = Box::new(CountingIdleSource::new(
+        std::net::IpAddr::from([192, 168, 1, 1]),
+        poll_count.clone(),
+    ));
 
     let provider = Box::new(MockDnsProvider::new("test"));
     let state_store = Box::new(MockStateStore::new());

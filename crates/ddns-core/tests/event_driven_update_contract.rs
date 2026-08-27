@@ -17,7 +17,83 @@ mod common;
 use common::*;
 use ddns_core::DdnsEngine;
 use ddns_core::traits::IpChangeEvent;
+use ddns_core::traits::{StateRecord, StateStore};
+use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::{Mutex, atomic::AtomicUsize, atomic::Ordering};
+
+struct RateLimitTestStateStore {
+    records: Mutex<HashMap<String, (IpAddr, chrono::DateTime<chrono::Utc>)>>,
+    get_call_count: AtomicUsize,
+    set_call_count: AtomicUsize,
+    flush_call_count: AtomicUsize,
+}
+
+impl RateLimitTestStateStore {
+    fn new(record_name: &str, ip: IpAddr, last_updated: chrono::DateTime<chrono::Utc>) -> Self {
+        let mut records = HashMap::new();
+        records.insert(record_name.to_string(), (ip, last_updated));
+
+        Self {
+            records: Mutex::new(records),
+            get_call_count: AtomicUsize::new(0),
+            set_call_count: AtomicUsize::new(0),
+            flush_call_count: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl StateStore for RateLimitTestStateStore {
+    async fn get_last_ip(&self, record_name: &str) -> ddns_core::Result<Option<IpAddr>> {
+        self.get_call_count.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .get(record_name)
+            .map(|(ip, _)| *ip))
+    }
+
+    async fn get_record(&self, record_name: &str) -> ddns_core::Result<Option<StateRecord>> {
+        let value = self.records.lock().unwrap().get(record_name).cloned();
+        Ok(value.map(|(last_ip, last_updated)| StateRecord {
+            last_ip,
+            last_updated,
+            provider_metadata: HashMap::new(),
+        }))
+    }
+
+    async fn set_last_ip(&self, record_name: &str, ip: IpAddr) -> ddns_core::Result<()> {
+        self.set_call_count.fetch_add(1, Ordering::SeqCst);
+        self.records
+            .lock()
+            .unwrap()
+            .insert(record_name.to_string(), (ip, chrono::Utc::now()));
+        Ok(())
+    }
+
+    async fn set_record(&self, record_name: &str, record: &StateRecord) -> ddns_core::Result<()> {
+        self.records.lock().unwrap().insert(
+            record_name.to_string(),
+            (record.last_ip, record.last_updated),
+        );
+        Ok(())
+    }
+
+    async fn delete_record(&self, _record_name: &str) -> ddns_core::Result<()> {
+        Ok(())
+    }
+
+    async fn list_records(&self) -> ddns_core::Result<Vec<String>> {
+        Ok(self.records.lock().unwrap().keys().cloned().collect())
+    }
+
+    async fn flush(&self) -> ddns_core::Result<()> {
+        self.flush_call_count.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
 
 #[tokio::test]
 async fn one_ip_change_triggers_exactly_one_dns_update() {
@@ -231,5 +307,129 @@ async fn no_polling_between_events() {
         count, 1,
         "Expected 1 update without polling, got {} (possible polling detected)",
         count
+    );
+}
+
+#[tokio::test]
+async fn frequent_ip_changes_are_coalesced_with_min_interval() {
+    let initial_ip = IpAddr::from([192, 168, 1, 1]);
+    let (ip_source, ip_event_tx) = ControlledIpSource::new(initial_ip);
+
+    let provider = Box::new(MockDnsProvider::new("test"));
+    let provider_arc = std::sync::Arc::new(provider);
+
+    let state_store = RateLimitTestStateStore::new("example.com", initial_ip, chrono::Utc::now());
+
+    let mut config = minimal_config("example.com");
+    config.engine.min_update_interval_secs = 2;
+
+    let (engine, _event_rx) = DdnsEngine::new(
+        Box::new(ip_source),
+        Box::new(MockDnsProvider::sharing_counters_with(&provider_arc)),
+        Box::new(state_store),
+        config,
+    )
+    .expect("engine construction succeeds");
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+    let engine_handle =
+        tokio::spawn(async move { engine.run_for_testing(Some(shutdown_rx)).await });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    ip_event_tx
+        .send(IpChangeEvent::new(
+            IpAddr::from([10, 0, 0, 2]),
+            Some(initial_ip),
+        ))
+        .expect("event send succeeds");
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    ip_event_tx
+        .send(IpChangeEvent::new(
+            IpAddr::from([10, 0, 0, 3]),
+            Some(IpAddr::from([10, 0, 0, 2])),
+        ))
+        .expect("event send succeeds");
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    ip_event_tx
+        .send(IpChangeEvent::new(
+            IpAddr::from([10, 0, 0, 4]),
+            Some(IpAddr::from([10, 0, 0, 3])),
+        ))
+        .expect("event send succeeds");
+
+    // Wait for interval (2s) plus processing cushion. Only one actual API call
+    // should happen with the latest IP after rate limiting.
+    tokio::time::sleep(tokio::time::Duration::from_millis(2200)).await;
+
+    shutdown_tx.send(()).unwrap();
+    engine_handle.await.unwrap().unwrap();
+
+    let count = provider_arc.update_call_count();
+    assert_eq!(
+        count, 1,
+        "Expected one update for coalesced rapid IP changes, got {}",
+        count
+    );
+}
+
+/// A daemon restarting inside the minimum interval must not silently drop a
+/// stale initial update: it is deferred and delivered once the interval ends.
+#[tokio::test]
+async fn rate_limited_initial_update_is_deferred_and_delivered() {
+    let stored_ip = IpAddr::from([192, 168, 1, 1]);
+    let current_ip = IpAddr::from([10, 0, 0, 99]);
+
+    // Daemon "restarted" just now: last update timestamp is recent.
+    let state_store = RateLimitTestStateStore::new("example.com", stored_ip, chrono::Utc::now());
+
+    let (ip_source, _ip_event_tx) = ControlledIpSource::new(current_ip);
+
+    let provider = Box::new(MockDnsProvider::new("test"));
+    let provider_arc = std::sync::Arc::new(provider);
+
+    let mut config = minimal_config("example.com");
+    config.engine.min_update_interval_secs = 2;
+
+    let (engine, _event_rx) = DdnsEngine::new(
+        Box::new(ip_source),
+        Box::new(MockDnsProvider::sharing_counters_with(&provider_arc)),
+        Box::new(state_store),
+        config,
+    )
+    .expect("engine construction succeeds");
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+    // run_with_shutdown triggers the initial update path.
+    let engine_handle =
+        tokio::spawn(async move { engine.run_with_shutdown(Some(shutdown_rx)).await });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+    assert_eq!(
+        provider_arc.update_call_count(),
+        0,
+        "Initial update inside the rate-limit interval must be deferred, not sent"
+    );
+
+    // Interval (2s) elapses: the deferred initial update must be delivered.
+    tokio::time::sleep(tokio::time::Duration::from_millis(2100)).await;
+
+    shutdown_tx.send(()).unwrap();
+    engine_handle.await.unwrap().unwrap();
+
+    assert_eq!(
+        provider_arc.update_call_count(),
+        1,
+        "Deferred initial update should be delivered exactly once after the interval"
+    );
+    let updated = provider_arc.updated_records();
+    assert_eq!(
+        updated,
+        vec!["example.com".to_string()],
+        "Update should target the configured record"
     );
 }

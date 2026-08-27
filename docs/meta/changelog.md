@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.2.6] - 2026-08-28
+
+### Fixed
+
+- **Rate-limited updates were silently dropped**: IP changes arriving inside `DDNS_MIN_UPDATE_INTERVAL_SECS` were
+  permanently skipped, leaving DNS records stale until the next IP change
+  - Updates are now **deferred and coalesced**: only the latest IP is kept and delivered once the interval elapses
+  - Rate-limited **initial updates on restart** are also deferred and delivered (previously discarded)
+- **Shutdown robustness**: state flush is now bounded by a 5s timeout instead of hanging on blocked I/O
+
+### Changed
+
+- **Daemon shutdown flow**: `ddnsd` now signals the engine over a oneshot channel and enforces a 30s graceful
+  shutdown deadline (then aborts), replacing the unbounded `drop(handle)` approach
+- **IP stream termination**: the engine now exits cleanly when the `IpSource` watch stream ends
+  (systemd `Restart=always` recovers it) instead of idling forever on a dead stream
+
+### Technical Details
+
+- `crates/ddns-core/src/engine/mod.rs`: added `PendingRateLimitUpdate` deferral queue with an earliest-deadline
+  timer inside the `tokio::select!` loops; `should_defer_update` handles idempotency + rate limiting
+- `crates/ddnsd/src/main.rs`: structured shutdown select with engine-first exit handling and event-listener cleanup
+- New contract tests: `frequent_ip_changes_are_coalesced_with_min_interval`,
+  `rate_limited_initial_update_is_deferred_and_delivered`
+
+---
+
 ## [v0.2.2] - 2026-01-19
 
 ### Fixed
